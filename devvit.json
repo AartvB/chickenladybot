@@ -23,19 +23,26 @@
       }
     ]
   },
-  "forms": {
-    "mopComment": "/internal/form/mop-comment-submit",
-    "mopPost": "/internal/form/mop-post-submit"
-  },
+  "forms": {},
   "triggers": {
-    "onAppInstall": "/internal/triggers/on-app-install"
+    "onAppInstall": "/internal/triggers/on-app-install",
+    "onAppUpgrade": "/internal/triggers/on-app-upgrade"
   },
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch"
   },
+  "scheduler": {
+    "tasks": {
+      "new-post-handler": {
+        "endpoint": "/internal/tasks/new-post-handler",
+        "cron": "*/10 * * * * *"
+      }
+    }
+  },
   "permissions": {
-    "reddit": true
+    "reddit": true,
+    "redis": true
   },
   "dev": {
     "subreddit": "chickenladybot_dev"

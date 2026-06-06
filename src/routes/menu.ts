@@ -4,6 +4,7 @@ import type { FormField } from '@devvit/shared-types/shared/form.js';
 
 export const menu = new Hono();
 
+/** Everything below this is from the template! */
 const buildNukeFields = (targetId: string): FormField[] => [
   {
     name: 'targetId',

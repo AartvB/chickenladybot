@@ -4,6 +4,7 @@ import { context } from '@devvit/web/server';
 import { isT1, isT3 } from '@devvit/shared-types/tid.js';
 import { handleNuke, handleNukePost } from '../core/nuke';
 
+/** Everything below this is from the template! */
 type NukeFormValues = {
   remove?: boolean;
   lock?: boolean;
