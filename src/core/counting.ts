@@ -7,8 +7,8 @@ async function addPostToDatabase(postId: T3, postNumber: number, authorName: str
   const maxPostScore = maxPost?.score ?? 0;
 
   await redis.set('current-count', postNumber.toString());
-  await redis.zAdd('posts', { member: postId, score: maxPostScore });
-  await redis.zAdd(`posts-of-${authorName}`, { member: postId, score: maxPostScore });
+  await redis.zAdd('posts', { member: postId, score: maxPostScore+1 });
+  await redis.zAdd(`posts-of-${authorName}`, { member: postId, score: maxPostScore+1 });
 
   // TODO: Record streak
   // TODO: Update user flair
@@ -16,6 +16,7 @@ async function addPostToDatabase(postId: T3, postNumber: number, authorName: str
 }
 
 export async function handleNewPosts(): Promise<{ message: string; status: string; number: 200 | 404 }> {
+  // TODO: Add extra disclaimer to removal reason if the delay between removal and the post being created is more than 2 minutes, to avoid confusion in case of a delay by reddit in removing the post
   const startTime = Date.now();
   while (await redis.zCard('new_post_queue') > 0) {
     const startTimeCurrentPost = Date.now();
