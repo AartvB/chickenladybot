@@ -94,26 +94,32 @@ The template demonstrates Reddit mod tool development through the "Mop" feature:
 This template provides everything you need to build powerful, user-friendly moderation tools for Reddit communities.
 
 # FIXME: IMPLEMENT THE FOLLOWING FUNCTIONS
+Helpers, possibly not needed to implement:
 - def setup_database(self):
 - def backup_database(self):
-- def fill_database_after_failure(self):
 - def get_all_posts(self, username):
 - def get_all_users(self):
+
+FLAIR/STREAK
 - def record_all_streaks(self):
 - def record_post_streaks_user(self, username):
-- def record_empty_post_streaks(self, batch_size = 500):
-- def record_post_statistic(self, post_id):
-- def record_post_statistics(self, n_days_history = 21):
 - def update_all_flair(self):
-- def get_author(self, submission):
-- def add_COAD_streak(self):
-- def get_posts_after(self, post_id):
-- def add_post(self, post_id):
-- def check_player_streak(self):
-- def delete_post(self):
+
+DELETED POSTS
 - def check_for_deleted_posts(self):
+
+MOD functions
+- def fill_database_after_failure(self):
+- def add_COAD_streak(self):
+- def check_player_streak(self):
+- def add_post(self, post_id):
+- def delete_post(self):
 - def start_maintenance(self):
 - def end_maintenance(self):
+
+STATISTICS
+- def record_post_statistic(self, post_id):
+- def record_post_statistics(self, n_days_history = 21):
 - def update_count_leaderboard(self):
 - def update_whole_counts_leaderboard(self):
 - def update_top_posts_leaderboards(self):

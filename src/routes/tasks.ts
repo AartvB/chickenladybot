@@ -8,11 +8,16 @@ export const tasks = new Hono();
 
 tasks.post('/new-post-handler', async (c) => {
   // Only do this if this action is not currently being executed in parralel
-  const lock_key = 'new-post-handler-lock'; // FIXME: Add timer remove lock after 35 seconds just in case something goes wrong and the lock doesn't get released
-  if (await redis.get(lock_key) == 'locked') {
-    return c.json<TaskResponse>({ status: 'locked' }, 200);
+  const lock_key = 'new-post-handler-lock';
+  const now = Date.now();
+  const lockStatus = await redis.get(lock_key);
+  if (lockStatus != 'open') {
+    const lockTime = parseInt(lockStatus || '0');
+    if (lockTime >= now - 35 * 1000) { // If the lock has been active for more than 35 seconds, release it and continue processing
+      return c.json<TaskResponse>({ status: 'locked' }, 200);
+    }
   }
-  await redis.set(lock_key, 'locked');
+  await redis.set(lock_key, now.toString());
 
   let result;
   if (await redis.zCard('new_post_queue') > 0) { result = await handleNewPosts(); } // Handle the posts in the queue
@@ -24,11 +29,16 @@ tasks.post('/new-post-handler', async (c) => {
 });
 
 tasks.post('/streak-handler', async (c) => {
-  const lock_key = 'streak-handler-lock'; // FIXME: Add timer remove lock after 35 seconds just in case something goes wrong and the lock doesn't get released
-  if (await redis.get(lock_key) == 'locked') {
-    return c.json<TaskResponse>({ status: 'locked' }, 200);
+  const lock_key = 'streak-handler-lock';
+  const now = Date.now();
+  const lockStatus = await redis.get(lock_key);
+  if (lockStatus != 'open') {
+    const lockTime = parseInt(lockStatus || '0');
+    if (lockTime >= now - 35 * 1000) { // If the lock has been active for more than 35 seconds, release it and continue processing
+      return c.json<TaskResponse>({ status: 'locked' }, 200);
+    }
   }
-  await redis.set(lock_key, 'locked');
+  await redis.set(lock_key, now.toString());
 
   const result = await handleStreak();
 
