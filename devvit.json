@@ -36,7 +36,11 @@
     "tasks": {
       "new-post-handler": {
         "endpoint": "/internal/tasks/new-post-handler",
-        "cron": "*/10 * * * * *"
+        "cron": "*/2 * * * * *"
+      },
+      "streak-handler": {
+        "endpoint": "/internal/tasks/streak-handler",
+        "cron": "*/5 * * * * *"
       }
     }
   },
