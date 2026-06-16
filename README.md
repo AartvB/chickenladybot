@@ -105,9 +105,6 @@ FLAIR/STREAK
 - def record_post_streaks_user(self, username):
 - def update_all_flair(self):
 
-DELETED POSTS
-- def check_for_deleted_posts(self):
-
 MOD functions
 - def fill_database_after_failure(self):
 - def add_COAD_streak(self):

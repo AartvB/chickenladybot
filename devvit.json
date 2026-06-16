@@ -41,6 +41,10 @@
       "streak-handler": {
         "endpoint": "/internal/tasks/streak-handler",
         "cron": "*/5 * * * * *"
+      },
+      "deleted-post-handler": {
+        "endpoint": "/internal/tasks/deleted-post-handler",
+        "cron": "*/10 * * * * *"
       }
     }
   },

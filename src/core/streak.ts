@@ -1,5 +1,5 @@
 import { context, reddit } from '@devvit/web/server';
-import { readList } from './helpers';
+import { readList, isPostDeleted, addToEndOfQueue } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
@@ -20,7 +20,7 @@ async function calculateStreakForTimezone(earlier_timestamps: number[], other_st
 
   // Find all possible COAD streaks
   let COAD_dates = [];
-  if (other_streak_sources != null) {
+  if (other_streak_sources != undefined) {
     for (const streak of other_streak_sources) {
       if (streak.source === 'COAD') {
         COAD_dates.push([dateFormatter.format(new Date(streak.timestamp)), streak.streak]);
@@ -74,17 +74,15 @@ async function calculateStreak(username: string, timestamp?: number): Promise<{ 
 
   let earlier_posts = await readList(`posts-of-${username}`);
   let earlier_timestamps = [];
-  for (const postId of earlier_posts) {
-    const postInfo = await redis.get(`post-info-${postId.member}`);
-    if (postInfo == null) { throw new Error(`Error: No post info found for post ${postId.member}`); }
-    const earlier_timestamp = JSON.parse(postInfo).timestamp;
+  for (const postInfo of earlier_posts) {
+    const earlier_timestamp = postInfo['score'];
     if (earlier_timestamp > timestamp) { continue; } // Only handle timestamps before the current timestamp
     // TODO: Possibly stop the loop instead of continue if the timestamps are sorted and we have reached a timestamp that is before the current timestamp, to avoid unnecessary loops
     earlier_timestamps.push(earlier_timestamp);
   }
 
   let other_streak_sources = await redis.get(`other-streaks-of-${username}`);
-  if (other_streak_sources != null) { other_streak_sources = JSON.parse(other_streak_sources); } // FIXME: TEST
+  if (other_streak_sources != undefined) { other_streak_sources = JSON.parse(other_streak_sources); }
 
   let max_streak = 0;
   let max_COAD_streak = 0;
@@ -102,11 +100,7 @@ async function getTextFromFlair(text: string): Promise<string> {
 	return match?.[1] || text;
 }
 
-async function updateUserFlair(username: string) {
-	const normal_streak = await redis.zScore('current-streaks', username) ?? 0;
-	const COAD_streak = await redis.zScore('current-COAD-streaks', username) ?? 0;	
-	const streak = Math.max(normal_streak, COAD_streak);
-
+async function updateUserFlair(username: string, streak: number) {
 	const user = await reddit.getUserByUsername(username);
 	if (user) {
 		let flairGenerator = await user.getUserFlairBySubreddit(context.subredditName);
@@ -135,17 +129,20 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
     const postId = postInfo['member'];
 
-    const post = await reddit.getPostById(postId as T3); // FIXME: Check if posts exists
+    const post = await reddit.getPostById(postId as T3);
+
+		if (await isPostDeleted(post)) { await addToEndOfQueue('deleted-post-queue', postId); await redis.zRem('streak-queue', [postId]); continue; }
+
 		const username = post.authorName;
 		const timestamp = post.createdAt.getTime();
-    const streak = await calculateStreak(username, timestamp);
+    const streak = await calculateStreak(username, timestamp); // FIXME: Test COAD streaks
 
 		await redis.zAdd('current-streaks', { member: username, score: streak.streak });
 		await redis.zAdd('current-COAD-streaks', { member: username, score: streak.COAD_streak });
 		await redis.zAdd('post-streaks', { member: postId, score: streak.streak });
 		await redis.zAdd('post-COAD-streaks', { member: postId, score: streak.COAD_streak });
 
-		await updateUserFlair(username);
+		await updateUserFlair(username, Math.max(streak.streak, streak.COAD_streak));
 
 		await redis.zRem('streak-queue', [postId]);
 		const processingTime = Date.now() - startTimeCurrentPost;

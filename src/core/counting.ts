@@ -1,39 +1,15 @@
-import { botExplainer } from './helpers';
+import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost } from './helpers';
 import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
 
-async function updateTargetPost() {
-  // Update the post that tells the user what the correct next number is.
-
-  const target_post_id = await redis.get('current-count-post-id');
-  if (target_post_id == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
-  let target_post = await reddit.getPostById(target_post_id as T3);
-  const current_count_string = await redis.get('current-count');
-  const current_count = parseInt(current_count_string || '0');
-  const subreddit_name = await redis.get('subredditname');
-  if (subreddit_name == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
-
-  const text = `The next number should be: [${current_count + 1}](https://www.reddit.com/r/${subreddit_name}/submit?title=${current_count + 1})` + botExplainer();
-  await target_post.edit({ text: text });
-
-  return { status: 'ok', message: `Successfully processed new posts`, number: 200 }
-}
-
 async function addPostToDatabase(postId: T3, postNumber: number, authorName: string, timestamp: number) {
-  const maxPost = (await redis.zRange('posts', -1, -1))[0];
-  const maxPostScore = maxPost?.score ?? 0;
-
   await redis.set('current-count', postNumber.toString());
-  await redis.zAdd('posts', { member: postId, score: maxPostScore+1 });
-  await redis.zAdd(`posts-of-${authorName}`, { member: postId, score: maxPostScore+1 });
-  await redis.set(`post-info-${postId}`, JSON.stringify({ 'authorName': authorName, 'timestamp': timestamp }));
+  await redis.zAdd('posts', {member: postId, score: timestamp });
+  await redis.zAdd(`posts-of-${authorName}`, { member: postId, score: timestamp });
+  await redis.set(`post-info-${postId}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString() }));
 
-  // Only adds to the end of the streak-queue
-  const maxStreak = (await redis.zRange('streak-queue', -1, -1))[0];
-  const maxStreakScore = maxStreak?.score ?? 0;
-
-  await redis.zAdd('streak-queue', { member: postId, score: maxStreakScore+1 })
+  await addToEndOfQueue('streak-queue', postId);
 }
 
 async function removePost(postId: T3, commentText: string) {
@@ -59,10 +35,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
 
     const post = await reddit.getPostById(postId as T3);
 
-    if (post.authorName == '[deleted]' || post.removed) { // TODO: Add to to delete list?
-      await redis.zRem('new_post_queue', [postId]);
-      continue;
-    }
+    if (await isPostDeleted(post)) { await redis.zRem('new_post_queue', [postId]); continue; }
 
     const postTitle = post.title;
     if (/^\d+$/.test(postTitle)) {
@@ -71,63 +44,59 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
       if (currentCountString == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
       const currentCount = parseInt(currentCountString);
 
-      if (postNumber == currentCount + 1 || currentCount == 0) {
-        if (!post.approved) {
+      if (post.approved) { await addPostToDatabase(postId as T3, postNumber, post.authorName, post.createdAt.getTime()); }
+      else if (postNumber == currentCount + 1 || currentCount == 0) {
+        // Check if the user has posted twice on the same calendar day in the last 3 days
+        let postDateTimes = [[postId, post.createdAt.getTime()]];
 
-          // Check if the user has posted twice on the same calendar day in the last 3 days
-          let postDateTimes = [[postId, post.createdAt.getTime()]];
-
-          let earlierPosts = (await redis.zRange(`posts-of-${post.authorName}`, -20, -1)).reverse();
-          for (const postInfo of earlierPosts) {
-            const earlierPostId = postInfo['member'];
-            const earlierPost = await reddit.getPostById(earlierPostId as T3);
-            if ((earlierPost.authorName == '[deleted]' || earlierPost.removed) && earlierPost.createdAt.getTime() > Date.now() - 10 * 60000) { continue; } // Post was removed within 10 minutes ago, ignore it - FIXME: ADD TO TO DELETE LIST
-            // TODO: Remove magic number 10 in line above
-            // FIXME: can we directly look if it was removed within 10 minutes?
-            postDateTimes.push([earlierPostId, earlierPost.createdAt.getTime()]);
-            if (postDateTimes.length == 3) { break; } // Only use the two most recent posts
-          }
-
-          let postedOnDifferentCalanderDays = false;
-          for (const timeZone of Intl.supportedValuesOf('timeZone')) {
-            const dateFormatter = new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'});
-
-            const localDates = postDateTimes.map((dateTime) => dateFormatter.format(new Date(dateTime[1] as number)));
-
-            if (new Set(localDates).size == localDates.length) {
-              postedOnDifferentCalanderDays = true;
-              break;
-            }
-          }
-
-          if (!postedOnDifferentCalanderDays) {
-            let commentText = "This post has been removed because of your latest two or three posts, at least two have been on the same calendar day. You may post only once per calendar day. Please wait until the next calendar day to post again.\nThe posts were as follows:\n\n";
-            const now = Date.now();
-
-            for (const postDateTime of postDateTimes) {
-              const past = postDateTime[1] as number;
-              const diff = now - past;
-              const days = Math.floor(diff / 86400 / 1000); // 86400 seconds in a day, 1000 milliseconds in a second
-              const hours = Math.floor((diff % (86400 * 1000)) / (3600 * 1000));
-              const minutes = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
-              const seconds = Math.floor((diff % (60 * 1000)) / 1000);
-
-              const earlierPost = await reddit.getPostById(postDateTime[0] as T3);
-              commentText += `${days} days, ${hours} hours, ${minutes} minutes and ${seconds} seconds ago: [${earlierPost.title}](https://www.reddit.com/${earlierPost.permalink})\n\n`;            
-            }
-            await removePost(postId as T3, commentText);
-          }
-          else { await addPostToDatabase(postId as T3, postNumber, post.authorName, post.createdAt.getTime()); }
+        let earlierPosts = (await redis.zRange(`posts-of-${post.authorName}`, -20, -1)).reverse();
+        for (const postInfo of earlierPosts) {
+          const earlierPostId = postInfo['member'];
+          const earlierPost = await reddit.getPostById(earlierPostId as T3);
+          if (await isPostDeleted(earlierPost) && postInfo['score'] > Date.now() - 10 * 60000) { await addToEndOfQueue('deleted-post-queue', earlierPostId); continue; }
+          // TODO: Remove magic number 10 in line above
+          postDateTimes.push([earlierPostId, postInfo['score']]);
+          if (postDateTimes.length == 3) { break; } // Only use the two most recent posts
         }
+
+        let postedOnDifferentCalanderDays = false;
+        for (const timeZone of Intl.supportedValuesOf('timeZone')) {
+          const dateFormatter = new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'});
+
+          const localDates = postDateTimes.map((dateTime) => dateFormatter.format(new Date(dateTime[1] as number)));
+
+          if (new Set(localDates).size == localDates.length) {
+            postedOnDifferentCalanderDays = true;
+            break;
+          }
+        }
+
+        if (!postedOnDifferentCalanderDays) {
+          let commentText = "This post has been removed because of your latest two or three posts, at least two have been on the same calendar day. You may post only once per calendar day. Please wait until the next calendar day to post again.\nThe posts were as follows:\n\n";
+          const now = Date.now();
+
+          for (const postDateTime of postDateTimes) {
+            const past = postDateTime[1] as number;
+            const diff = now - past;
+            const days = Math.floor(diff / 86400 / 1000); // 86400 seconds in a day, 1000 milliseconds in a second
+            const hours = Math.floor((diff % (86400 * 1000)) / (3600 * 1000));
+            const minutes = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
+            const seconds = Math.floor((diff % (60 * 1000)) / 1000);
+
+            const earlierPost = await reddit.getPostById(postDateTime[0] as T3);
+            commentText += `${days} days, ${hours} hours, ${minutes} minutes and ${seconds} seconds ago: [${earlierPost.title}](https://www.reddit.com/${earlierPost.permalink})\n\n`;            
+          }
+          await removePost(postId as T3, commentText);
+        }
+        else { await addPostToDatabase(postId as T3, postNumber, post.authorName, post.createdAt.getTime()); }
       }
-      else if (!post.approved) {
+      else {
         const currentCountLink = await redis.get('current-count-link');
         if (currentCountLink == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
         const commentText = `This post has been removed because the correct next number was ${currentCount + 1}, but this post has '${postNumber}' as title. Please check the most recent number before posting. You can find the correct number in [this](${currentCountLink}) post.\n\nIt might be possible that someone else simply was slightly faster with their post.\n\nFeel free to post again with the correct new number.`;
 
         await removePost(postId as T3, commentText);
       }
-      else { await addPostToDatabase(postId as T3, Math.max(postNumber, currentCount), post.authorName, post.createdAt.getTime()); }
     }
     else if (!post.approved) {
       // Leave a comment explaining the removal
@@ -137,7 +106,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
 
       await removePost(postId as T3, commentText);
     }
-    else {} // Valid post detected
+    else {} // Valid post detected, but not added to the database since it's not a number
 
     await redis.zRem('new_post_queue', [postId]);
     const processingTime = Date.now() - startTimeCurrentPost;
