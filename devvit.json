@@ -45,6 +45,10 @@
       "deleted-post-handler": {
         "endpoint": "/internal/tasks/deleted-post-handler",
         "cron": "*/10 * * * * *"
+      },
+      "background-task-handler": {
+        "endpoint": "/internal/tasks/background-task-handler",
+        "cron": "*/35 * * * * *"
       }
     }
   },

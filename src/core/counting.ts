@@ -8,7 +8,7 @@ async function addPostToDatabase(postId: T3, postNumber: number, authorName: str
   await redis.zAdd('posts', {member: postId, score: timestamp });
   await redis.zAdd(`posts-of-${authorName}`, { member: postId, score: timestamp });
   await redis.set(`post-info-${postId}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString() }));
-
+  if (await redis.zScore('users', authorName) == undefined) { await addToEndOfQueue('users', authorName); }
   await addToEndOfQueue('streak-queue', postId);
 }
 

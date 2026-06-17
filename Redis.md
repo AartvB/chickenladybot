@@ -18,6 +18,8 @@ This file explains the structure of the Redis database for this app
 - **new-post-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single post handler is active at the same time.
 - **streak-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single streak handler is active at the same time.
 - **deleted-post-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single deleted post handler is active at the same time.
+- **current-background-task**: Which background process is currently running. Either 'flair', 'leaderboard' or 'cleanup'.
+- **background-task-tracker**: Which part of the background task must be executed next.
 - **current-count**: The current count of the subreddit.
 - **current-count-link**: The link of the post that shows what the current count is (TODO: REMOVE THIS IN THE FUTURE, WE ALREADY HAVE CURRENT-COUNT-POST-ID).
 - **current-count-post-id**: The id of the post that shows what the current count is.

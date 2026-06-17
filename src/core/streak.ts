@@ -1,5 +1,5 @@
 import { context, reddit } from '@devvit/web/server';
-import { readList, isPostDeleted, addToEndOfQueue } from './helpers';
+import { isPostDeleted, addToEndOfQueue } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
@@ -72,7 +72,7 @@ async function calculateStreak(username: string, timestamp?: number): Promise<{ 
 
   if (timestamp == undefined) { timestamp = Date.now(); }
 
-  let earlier_posts = await readList(`posts-of-${username}`);
+  let earlier_posts = await redis.zRange(`posts-of-${username}`, 0, -1);
   let earlier_timestamps = [];
   for (const postInfo of earlier_posts) {
     const earlier_timestamp = postInfo['score'];
@@ -158,4 +158,21 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     }
 	}
 	return { status: 'success', message: `Streaks calculated`, number: 200 };
+}
+
+export async function handleBackgroundStreak() {
+	let current_user_score = parseInt(await redis.get('background-task-tracker') || '0');
+	while (true) {
+		const current_user = (await redis.zRange('users', current_user_score, '+inf', { by: 'score' }))[0];
+		if (current_user == undefined) { return; }
+
+		const streaks = await calculateStreak(current_user.member);
+
+		await redis.zAdd('current-streaks', { member: current_user.member, score: streaks.streak });
+		await redis.zAdd('current-COAD-streaks', { member: current_user.member, score: streaks.COAD_streak });
+		await updateUserFlair(current_user.member, Math.max(streaks.streak, streaks.COAD_streak));
+
+		current_user_score = current_user.score + 1;
+		await redis.set('background-task-tracker', current_user_score.toString());
+	}
 }

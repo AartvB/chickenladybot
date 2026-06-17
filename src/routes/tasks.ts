@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { handleStreak } from '../core/streak';
+import { handleBackgroundStreak, handleStreak } from '../core/streak';
 import { handleNewPosts, detectNewPosts } from '../core/counting';
 import { handleDeletedPosts } from '../core/deletion';
 import { redis, type TaskResponse } from '@devvit/web/server';
@@ -56,4 +56,27 @@ tasks.post('/deleted-post-handler', async (c) => {
   const result = await handleDeletedPosts();
   await redis.set(lock_key, 'open');
   return c.json<TaskResponse>({ status: result['status'], message: result['message']}, result['number'] as ContentfulStatusCode);
+});
+
+tasks.post('background-task-handler', async (c) => {
+  // Handles tasks that are not time-sensitive. It performs 3 tasks: 'flair', 'leaderboard' and 'cleanup'.
+  // Flair: Check flair of all users if it is still accurate. If a user has not posted for too long, their streak should be reset to 0.
+  // Leaderboard: Update the leaderboard statistics and update the leaderboard.
+  // Cleanup: Remove posts that have been deleted more than 21 days ago from the database, for privacy reasons.
+  // It takes many calls to finish a task, and when it finishes a task, it continues with the next task.
+
+  const current_task = await redis.get('current-background-task');
+  if (current_task == 'flair') {
+    await handleBackgroundStreak();
+    await redis.set('current-background-task', 'leaderboard');
+  }
+  else if (current_task == 'leaderboard') {
+    // FIXME: Implement leaderboard update logic here
+    await redis.set('current-background-task', 'cleanup');
+  }
+  else if (current_task == 'cleanup') {
+    // FIXME: Implement cleanup logic here
+    await redis.set('current-background-task', 'flair');
+  }
+  return c.json<TaskResponse>({ status: 'success', message: `Background task ${current_task} completed`, number: 200 });
 });

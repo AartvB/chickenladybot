@@ -37,6 +37,8 @@ triggers.post('/on-app-upgrade', async (c) => {
   await redis.set('current-count-post-id', '1tyqxix');
   await redis.set('subredditname', input.subreddit?.name || ''); // Store the subreddit name in the database for later use in counting logic, to avoid relying on context.subredditName which might not always be available in the counting code
   await redis.set('new-post-limit', '10'); // Set the limit for number of new posts to process at once, to avoid long processing times if there are a lot of new posts.
+  await redis.set('current-background-task', 'flair'); // Set the current background task to flair, to ensure the bot starts with the correct task after upgrade
+  await redis.set('background-task-tracker', '0'); // Reset the background task tracker, to ensure the bot starts with the correct task after upgrade
   // FIXME: set current-count to the correct count based on the existing posts in the subreddit, in case the bot was offline for a while and missed some posts.
 
   return c.json<TriggerResponse>(
