@@ -1,7 +1,7 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 import { reddit } from '@devvit/web/server';
-import { updateTargetPost, isPostDeleted, botExplainer } from './helpers';
+import { updateTargetPost, isPostDeleted, botExplainer, addToEndOfQueue } from './helpers';
 
 async function removePost(postId: T3) {
 	const alreadyDeleted = await redis.zScore('deleted-posts', postId) != undefined;
@@ -10,13 +10,21 @@ async function removePost(postId: T3) {
 	const postData = await redis.get(`post-info-${postId}`);
 	if (postData == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
 	const authorName = JSON.parse(postData).authorName;
+	const timestamp = await redis.zScore('posts', postId);
+	if (timestamp == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
 
-	await redis.zAdd('deleted-posts', { member: postId, score: Date.now() });
 	await redis.zRem('posts', [postId]);
 	await redis.zRem('deleted-post-queue', [postId]);
 	await redis.zRem('post-streaks', [postId]);
 	await redis.zRem('post-COAD-streaks', [postId]);
 	await redis.zRem(`posts-of-${authorName}`, [postId]);
+
+	// Calculate streak again
+	await addToEndOfQueue('streak-queue', postId);
+	const postsAfter = await redis.zRange('posts', timestamp, '+inf', {by: 'score'});
+	for (const postInfo of postsAfter) { await addToEndOfQueue('streak-queue', postInfo['member']); }
+
+	await redis.zAdd('deleted-posts', { member: postId, score: Date.now() });
 
 	let message = `This post has been removed by you or a moderator within 10 minutes of posting. Therefore this post does not count as your post for this day and does not contribute to your streak, feel free to post again.` // TODO: Remove magic number 10
 	message += await botExplainer();

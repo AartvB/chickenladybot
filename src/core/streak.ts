@@ -131,20 +131,26 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 
     const post = await reddit.getPostById(postId as T3);
 
-		if (await isPostDeleted(post)) { await addToEndOfQueue('deleted-post-queue', postId); await redis.zRem('streak-queue', [postId]); continue; }
-
 		const username = post.authorName;
 		const timestamp = post.createdAt.getTime();
     const streak = await calculateStreak(username, timestamp); // FIXME: Test COAD streaks
 
 		await redis.zAdd('current-streaks', { member: username, score: streak.streak });
 		await redis.zAdd('current-COAD-streaks', { member: username, score: streak.COAD_streak });
-		await redis.zAdd('post-streaks', { member: postId, score: streak.streak });
-		await redis.zAdd('post-COAD-streaks', { member: postId, score: streak.COAD_streak });
-
 		await updateUserFlair(username, Math.max(streak.streak, streak.COAD_streak));
 
-		await redis.zRem('streak-queue', [postId]);
+		if (await isPostDeleted(post)) {
+			await addToEndOfQueue('deleted-post-queue', postId);
+			await redis.zRem('streak-queue', [postId]);
+		}
+		else {
+			await redis.zAdd('post-streaks', { member: postId, score: streak.streak });
+			await redis.zAdd('post-COAD-streaks', { member: postId, score: streak.COAD_streak });
+
+			const current_queue_score = await redis.zScore('streak-queue', postId);
+			if (current_queue_score == postInfo['score']) { await redis.zRem('streak-queue', [postId]); } // Only remove the post from the queue if it has not been added again with a new score. That's because it gets added to the queue again if a post before it was deleted, which might have influence on the streak
+		}
+
 		const processingTime = Date.now() - startTimeCurrentPost;
     const timeLeft = 30000 - (Date.now() - startTime);
     if (timeLeft < processingTime * 1.5 || timeLeft < 10000) {

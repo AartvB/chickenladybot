@@ -97,8 +97,7 @@ This template provides everything you need to build powerful, user-friendly mode
 Helpers, possibly not needed to implement:
 - def setup_database(self):
 - def backup_database(self):
-- def get_all_posts(self, username):
-- def get_all_users(self):
+- cleanup (remove deleted posts after 21 days, remove data from accounts that have been deleted, remove as much info as possible from posts that have been deleted)
 
 FLAIR/STREAK
 - def record_all_streaks(self):
