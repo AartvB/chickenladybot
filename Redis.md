@@ -2,6 +2,8 @@
 
 This file explains the structure of the Redis database for this app
 
+Every key has the addition of '-vx' at the end, with x being a number (so -v1, -v2 etc.). In case something happens with the database, this makes sure restoring the old database doesn't overwrite the new database that is being made.
+
 ## Sorted sets
 - **users**: Contains all usernames of users that have posted to the sub. Sorted based on time of first post. Score is an integer, counting up.
 - **posts**: Contains all ids of posts that have been approved. Does not contain deleted posts. Score is the timestamp of posting.

@@ -3,6 +3,7 @@ import { handleBackgroundStreak, handleStreak } from '../core/streak';
 import { handleNewPosts, detectNewPosts } from '../core/counting';
 import { handleDeletedPosts } from '../core/deletion';
 import { handleLeaderboards } from '../core/leaderboards';
+import { DBVersion } from '../core/helpers';
 import { redis, type TaskResponse } from '@devvit/web/server';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -10,7 +11,7 @@ export const tasks = new Hono();
 
 tasks.post('/new-post-handler', async (c) => {
   // Only do this if this action is not currently being executed in parralel
-  const lockKey = 'new-post-handler-lock';
+  const lockKey = `new-post-handler-lock-v${await DBVersion()}`;
   const now = Date.now();
   const lockStatus = await redis.get(lockKey);
   if (lockStatus != 'open') {
@@ -21,14 +22,14 @@ tasks.post('/new-post-handler', async (c) => {
   }
   await redis.set(lockKey, now.toString());
   let result;
-  if (await redis.zCard('new-post-queue') > 0) { result = await handleNewPosts(); } // Handle the posts in the queue
+  if (await redis.zCard(`new-post-queue-v${await DBVersion()}`) > 0) { result = await handleNewPosts(); } // Handle the posts in the queue
   else { result = await detectNewPosts(); } // Check for new posts and add them to the queue
   await redis.set(lockKey, 'open');
   return c.json<TaskResponse>({ status: result['status'], message: result['message']}, result['number'] as ContentfulStatusCode);
 });
 
 tasks.post('/streak-handler', async (c) => {
-  const lockKey = 'streak-handler-lock';
+  const lockKey = `streak-handler-lock-v${await DBVersion()}`;
   const now = Date.now();
   const lockStatus = await redis.get(lockKey);
   if (lockStatus != 'open') {
@@ -44,7 +45,7 @@ tasks.post('/streak-handler', async (c) => {
 });
 
 tasks.post('/deleted-post-handler', async (c) => {
-  const lockKey = 'deleted-post-handler-lock';
+  const lockKey = `deleted-post-handler-lock-v${await DBVersion()}`;
   const now = Date.now();
   const lockStatus = await redis.get(lockKey);
   if (lockStatus != 'open') {
@@ -66,20 +67,20 @@ tasks.post('background-task-handler', async (c) => {
   // Cleanup: Remove posts that have been deleted more than 21 days ago from the database, for privacy reasons.
   // It takes many calls to finish a task, and when it finishes a task, it continues with the next task.
 
-  const currentTask = await redis.get('current-background-task');
+  const currentTask = await redis.get(`current-background-task-v${await DBVersion()}`);
   console.log(`Current background task: ${currentTask}`);
   if (currentTask == 'flair') {
     await handleBackgroundStreak();
-    await redis.set('current-background-task', 'leaderboard');
+    await redis.set(`current-background-task-v${await DBVersion()}`, 'leaderboard');
   }
   else if (currentTask == 'leaderboard') {
     await handleLeaderboards();
-    await redis.set('current-background-task', 'cleanup');
+    await redis.set(`current-background-task-v${await DBVersion()}`, 'cleanup');
   }
   else if (currentTask == 'cleanup') {
     // FIXME: Implement cleanup logic here
-    await redis.set('current-background-task', 'flair');
+    await redis.set(`current-background-task-v${await DBVersion()}`, 'flair');
   }
-  await redis.del('background-task-tracker');
+  await redis.del(`background-task-tracker-v${await DBVersion()}`);
   return c.json<TaskResponse>({ status: 'success', message: `Background task ${currentTask} completed`, number: 200 });
 });

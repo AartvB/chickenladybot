@@ -3,10 +3,10 @@ import { T3 } from '@devvit/shared-types/tid.js';
 import { reddit } from '@devvit/web/server';
 import { Post } from '@devvit/web/server';
 
-export async function botExplainer(): Promise<string> { return "\n\n^(This comment is automatically updated by a bot. If you think it made a mistake, [contact the mods](https://www.reddit.com/message/compose/?to=/r/countwithchickenlady) via modmail. The code for this bot is fully open source, and can be found [here](https://github.com/AartvB/ChickenBotOnceADay).)"; }
-// FIXME: Above: add the correct link
-
+export async function botExplainer(): Promise<string> { return "\n\n^(This piece of content has been created automatically by a bot. If you think it made a mistake, [contact the mods](https://www.reddit.com/message/compose/?to=/r/countwithchickenlady) via modmail. The code for this bot is fully open source, and can be found [here](https://github.com/AartvB/chickenladybot).)"; }
 export async function isPostDeleted(post: Post): Promise<boolean> { return post.authorName == '[deleted]' || post.removed; }
+export async function DBVersion(): Promise<string> { return await redis.get('database-version') ?? '1'; }
+export async function DBkey(key: string): Promise<string> { const dbVersion = await DBVersion(); return `${key}-v${dbVersion}`; }
 
 export async function addToEndOfQueue(queueName: string, text: string): Promise<number> {
   const maxValue = (await redis.zRange(queueName, -1, -1))[0];
@@ -17,13 +17,13 @@ export async function addToEndOfQueue(queueName: string, text: string): Promise<
 
 export async function updateTargetPost() {
   // Update the post that tells the user what the correct next number is.
-
-  const targetPostId = await redis.get('current-count-post-id');
+  const dbVersion = await DBVersion();
+  const targetPostId = await redis.get(`current-count-post-id-v${dbVersion}`);
   if (targetPostId == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
   let targetPost = await reddit.getPostById(targetPostId as T3);
-  const currentCountString = await redis.get('current-count');
+  const currentCountString = await redis.get(`current-count-v${dbVersion}`);
   const currentCount = parseInt(currentCountString || '0');
-  const subredditName = await redis.get('subredditname');
+  const subredditName = await redis.get(`subredditname-v${dbVersion}`);
   if (subredditName == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
 
   const text = `The next number should be: [${currentCount + 1}](https://www.reddit.com/r/${subredditName}/submit?title=${currentCount + 1})` + await botExplainer();

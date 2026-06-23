@@ -1,5 +1,5 @@
 import { context, reddit } from '@devvit/web/server';
-import { isPostDeleted, addToEndOfQueue } from './helpers';
+import { isPostDeleted, addToEndOfQueue, DBVersion } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
@@ -69,10 +69,9 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
 
 async function calculateStreak(username: string, timestamp?: number): Promise<{ streak: number, CoadStreak: number}> {
   // Note that the streak is not recorded in the database!
-
+  const dbVersion = await DBVersion();
   if (timestamp == undefined) { timestamp = Date.now(); }
-
-  let earlierPosts = await redis.zRange(`posts-of-${username}`, 0, -1);
+  let earlierPosts = await redis.zRange(`posts-of-${username}-v${dbVersion}`, 0, -1);
   let earlierTimestamps = [];
   for (const postInfo of earlierPosts) {
     const earlierTimestamp = postInfo['score'];
@@ -81,7 +80,7 @@ async function calculateStreak(username: string, timestamp?: number): Promise<{ 
     earlierTimestamps.push(earlierTimestamp);
   }
 
-  let otherStreakSources = await redis.get(`other-streaks-of-${username}`);
+  let otherStreakSources = await redis.get(`other-streaks-of-${username}-v${dbVersion}`);
   if (otherStreakSources != undefined) { otherStreakSources = JSON.parse(otherStreakSources); }
 
   let maxStreak = 0;
@@ -121,11 +120,12 @@ async function updateUserFlair(username: string, streak: number) {
 
 export async function handleStreak(): Promise<{ status: string; message: string; number: number }> {
 	// Only removes from the beginning of the queue
+  const dbVersion = await DBVersion();
   const startTime = Date.now();
 	
-  while (await redis.zCard('streak-queue') > 0) {
+  while (await redis.zCard(`streak-queue-v${dbVersion}`) > 0) {
     const startTimeCurrentPost = Date.now();
-    const postInfo = (await redis.zRange('streak-queue', 0, 0))[0];
+    const postInfo = (await redis.zRange(`streak-queue-v${dbVersion}`, 0, 0))[0];
     if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
     const postId = postInfo['member'];
 
@@ -135,20 +135,20 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 		const timestamp = post.createdAt.getTime();
     const streak = await calculateStreak(username, timestamp); // FIXME: Test COAD streaks
 
-		await redis.zAdd('current-streaks', { member: username, score: streak.streak });
-		await redis.zAdd('current-COAD-streaks', { member: username, score: streak.CoadStreak });
+		await redis.zAdd(`current-streaks-v${dbVersion}`, { member: username, score: streak.streak });
+		await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, { member: username, score: streak.CoadStreak });
 		await updateUserFlair(username, Math.max(streak.streak, streak.CoadStreak));
 
 		if (await isPostDeleted(post)) {
-			await addToEndOfQueue('deleted-post-queue', postId);
-			await redis.zRem('streak-queue', [postId]);
+			await addToEndOfQueue(`deleted-post-queue-v${dbVersion}`, postId);
+			await redis.zRem(`streak-queue-v${dbVersion}`, [postId]);
 		}
 		else {
-			await redis.zAdd('post-streaks', { member: postId, score: streak.streak });
-			await redis.zAdd('post-COAD-streaks', { member: postId, score: streak.CoadStreak });
+			await redis.zAdd(`post-streaks-v${dbVersion}`, { member: postId, score: streak.streak });
+			await redis.zAdd(`post-COAD-streaks-v${dbVersion}`, { member: postId, score: streak.CoadStreak });
 
-			const currentQueueScore = await redis.zScore('streak-queue', postId);
-			if (currentQueueScore == postInfo['score']) { await redis.zRem('streak-queue', [postId]); } // Only remove the post from the queue if it has not been added again with a new score. That's because it gets added to the queue again if a post before it was deleted, which might have influence on the streak
+			const currentQueueScore = await redis.zScore(`streak-queue-v${dbVersion}`, postId);
+			if (currentQueueScore == postInfo['score']) { await redis.zRem(`streak-queue-v${dbVersion}`, [postId]); } // Only remove the post from the queue if it has not been added again with a new score. That's because it gets added to the queue again if a post before it was deleted, which might have influence on the streak
 		}
 
 		const processingTime = Date.now() - startTimeCurrentPost;
@@ -161,21 +161,22 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 }
 
 export async function handleBackgroundStreak() {
-	let currentUserScore = parseInt(await redis.get('background-task-tracker') || '0');
+  const dbVersion = await DBVersion();
+	let currentUserScore = parseInt(await redis.get(`background-task-tracker-v${dbVersion}`) || '0');
 	while (true) {
-		const currentUser = (await redis.zRange('users', currentUserScore, '+inf', { by: 'score' }))[0];
+		const currentUser = (await redis.zRange(`users-v${dbVersion}`, currentUserScore, '+inf', { by: 'score' }))[0];
 		if (currentUser == undefined) {
-			await redis.set('background-task-tracker', '0');
+			await redis.set(`background-task-tracker-v${dbVersion}`, '0');
 			return;
 		}
 
 		const streaks = await calculateStreak(currentUser.member);
 
-		await redis.zAdd('current-streaks', { member: currentUser.member, score: streaks.streak });
-		await redis.zAdd('current-COAD-streaks', { member: currentUser.member, score: streaks.CoadStreak });
+		await redis.zAdd(`current-streaks-v${dbVersion}`, { member: currentUser.member, score: streaks.streak });
+		await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, { member: currentUser.member, score: streaks.CoadStreak });
 		await updateUserFlair(currentUser.member, Math.max(streaks.streak, streaks.CoadStreak));
 
 		currentUserScore = currentUser.score + 1;
-		await redis.set('background-task-tracker', currentUserScore.toString());
+		await redis.set(`background-task-tracker-v${dbVersion}`, currentUserScore.toString());
 	}
 }
