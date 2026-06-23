@@ -3,95 +3,95 @@ import { isPostDeleted, addToEndOfQueue } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
-async function calculateStreakForTimezone(earlier_timestamps: number[], other_streak_sources: any, timestamp: number, timeZone: string): Promise<{ streak: number, COAD_streak: number}> {
+async function calculateStreakForTimezone(earlierTimestamps: number[], otherStreakSources: any, timestamp: number, timeZone: string): Promise<{ streak: number, CoadStreak: number}> {
   // TODO: Stop loop if it is clear that it won't get better. For example, the last post was more than 48 hours ago.
   // TODO: Handle LOCAL saved streaks
 
   // Sort timestamps from latest to earliest
-  earlier_timestamps.sort((a, b) => b - a);
+  earlierTimestamps.sort((a, b) => b - a);
 
   // Transform all timestamps to dates
   const dateFormatter = new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'});
-  let today_datetime = new Date(timestamp);
-  let today = dateFormatter.format(today_datetime);
-  let yesterday_datetime = new Date(timestamp);
-  yesterday_datetime.setDate(yesterday_datetime.getDate() - 1);
-  let yesterday = dateFormatter.format(yesterday_datetime);
+  let todayDatetime = new Date(timestamp);
+  let today = dateFormatter.format(todayDatetime);
+  let yesterdayDatetime = new Date(timestamp);
+  yesterdayDatetime.setDate(yesterdayDatetime.getDate() - 1);
+  let yesterday = dateFormatter.format(yesterdayDatetime);
 
   // Find all possible COAD streaks
-  let COAD_dates = [];
-  if (other_streak_sources != undefined) {
-    for (const streak of other_streak_sources) {
+  let CoadDates = [];
+  if (otherStreakSources != undefined) {
+    for (const streak of otherStreakSources) {
       if (streak.source === 'COAD') {
-        COAD_dates.push([dateFormatter.format(new Date(streak.timestamp)), streak.streak]);
+        CoadDates.push([dateFormatter.format(new Date(streak.timestamp)), streak.streak]);
       }
     }
   }
 
   let streak = 0;
-  let COAD_streak = 0;
-  let last_timestamp: number|null = null;
-  for (const post_timestamp of earlier_timestamps) {
-    const post_date = dateFormatter.format(post_timestamp);
-    if (last_timestamp == null && (post_date == today || post_date == yesterday)) { // This was the first post, and it was today or yesterday
+  let CoadStreak = 0;
+  let lastTimestamp: number|null = null;
+  for (const postTimestamp of earlierTimestamps) {
+    const postDate = dateFormatter.format(postTimestamp);
+    if (lastTimestamp == null && (postDate == today || postDate == yesterday)) { // This was the first post, and it was today or yesterday
       streak = 1;
-      last_timestamp = post_timestamp;
+      lastTimestamp = postTimestamp;
     }
-    else if (last_timestamp != null) { // This was not the first post
-      let previous_day_datetime = new Date(last_timestamp);
-      previous_day_datetime.setDate(previous_day_datetime.getDate() - 1);
-      if (post_date == dateFormatter.format(previous_day_datetime)) { // The previous post was one day apart
-        for (const [date, streak_value] of COAD_dates) {
-          if (date === post_date) {
-            COAD_streak = Math.max(COAD_streak, streak_value + streak);
+    else if (lastTimestamp != null) { // This was not the first post
+      let previousDayDatetime = new Date(lastTimestamp);
+      previousDayDatetime.setDate(previousDayDatetime.getDate() - 1);
+      if (postDate == dateFormatter.format(previousDayDatetime)) { // The previous post was one day apart
+        for (const [date, streakValue] of CoadDates) {
+          if (date === postDate) {
+            CoadStreak = Math.max(CoadStreak, streakValue + streak);
           }
         }
         streak++;
-        last_timestamp = post_timestamp;
+        lastTimestamp = postTimestamp;
       }
       else { break; }
     }
     else { streak = 0; break; } // Previous post was earlier than today or yesterday
 
-    if (last_timestamp != null) {
-      let previous_day_datetime = new Date(last_timestamp);
-      previous_day_datetime.setDate(previous_day_datetime.getDate() - 1);
-      for (const [date, streak_value] of COAD_dates) {
-        if (date === dateFormatter.format(previous_day_datetime)) {
-          COAD_streak = Math.max(COAD_streak, streak_value + streak);
+    if (lastTimestamp != null) {
+      let previousDayDatetime = new Date(lastTimestamp);
+      previousDayDatetime.setDate(previousDayDatetime.getDate() - 1);
+      for (const [date, streakValue] of CoadDates) {
+        if (date === dateFormatter.format(previousDayDatetime)) {
+          CoadStreak = Math.max(CoadStreak, streakValue + streak);
         }
       }
     }
   }
 
-  return {streak: streak, COAD_streak: COAD_streak};
+  return {streak: streak, CoadStreak: CoadStreak};
 }
 
-async function calculateStreak(username: string, timestamp?: number): Promise<{ streak: number, COAD_streak: number}> {
-  // Note that the streak is not recorded in the database! Use record_streak for that!
+async function calculateStreak(username: string, timestamp?: number): Promise<{ streak: number, CoadStreak: number}> {
+  // Note that the streak is not recorded in the database!
 
   if (timestamp == undefined) { timestamp = Date.now(); }
 
-  let earlier_posts = await redis.zRange(`posts-of-${username}`, 0, -1);
-  let earlier_timestamps = [];
-  for (const postInfo of earlier_posts) {
-    const earlier_timestamp = postInfo['score'];
-    if (earlier_timestamp > timestamp) { continue; } // Only handle timestamps before the current timestamp
+  let earlierPosts = await redis.zRange(`posts-of-${username}`, 0, -1);
+  let earlierTimestamps = [];
+  for (const postInfo of earlierPosts) {
+    const earlierTimestamp = postInfo['score'];
+    if (earlierTimestamp > timestamp) { continue; } // Only handle timestamps before the current timestamp
     // TODO: Possibly stop the loop instead of continue if the timestamps are sorted and we have reached a timestamp that is before the current timestamp, to avoid unnecessary loops
-    earlier_timestamps.push(earlier_timestamp);
+    earlierTimestamps.push(earlierTimestamp);
   }
 
-  let other_streak_sources = await redis.get(`other-streaks-of-${username}`);
-  if (other_streak_sources != undefined) { other_streak_sources = JSON.parse(other_streak_sources); }
+  let otherStreakSources = await redis.get(`other-streaks-of-${username}`);
+  if (otherStreakSources != undefined) { otherStreakSources = JSON.parse(otherStreakSources); }
 
-  let max_streak = 0;
-  let max_COAD_streak = 0;
+  let maxStreak = 0;
+  let maxCoadStreak = 0;
   for (const timeZone of Intl.supportedValuesOf('timeZone')) { // TODO: Stop when the max streak is found (nPosts + local streak == streak) and (nPosts + COAD streak == COAD streak)
-    const { streak, COAD_streak } = await calculateStreakForTimezone(earlier_timestamps, other_streak_sources, timestamp, timeZone);
-    max_streak = Math.max(max_streak, streak);
-    max_COAD_streak = Math.max(max_COAD_streak, COAD_streak);
+    const { streak, CoadStreak } = await calculateStreakForTimezone(earlierTimestamps, otherStreakSources, timestamp, timeZone);
+    maxStreak = Math.max(maxStreak, streak);
+    maxCoadStreak = Math.max(maxCoadStreak, CoadStreak);
   }
-  return { streak: max_streak, COAD_streak: max_COAD_streak };
+  return { streak: maxStreak, CoadStreak: maxCoadStreak };
 }
 
 async function getTextFromFlair(text: string): Promise<string> {
@@ -136,8 +136,8 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     const streak = await calculateStreak(username, timestamp); // FIXME: Test COAD streaks
 
 		await redis.zAdd('current-streaks', { member: username, score: streak.streak });
-		await redis.zAdd('current-COAD-streaks', { member: username, score: streak.COAD_streak });
-		await updateUserFlair(username, Math.max(streak.streak, streak.COAD_streak));
+		await redis.zAdd('current-COAD-streaks', { member: username, score: streak.CoadStreak });
+		await updateUserFlair(username, Math.max(streak.streak, streak.CoadStreak));
 
 		if (await isPostDeleted(post)) {
 			await addToEndOfQueue('deleted-post-queue', postId);
@@ -145,10 +145,10 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 		}
 		else {
 			await redis.zAdd('post-streaks', { member: postId, score: streak.streak });
-			await redis.zAdd('post-COAD-streaks', { member: postId, score: streak.COAD_streak });
+			await redis.zAdd('post-COAD-streaks', { member: postId, score: streak.CoadStreak });
 
-			const current_queue_score = await redis.zScore('streak-queue', postId);
-			if (current_queue_score == postInfo['score']) { await redis.zRem('streak-queue', [postId]); } // Only remove the post from the queue if it has not been added again with a new score. That's because it gets added to the queue again if a post before it was deleted, which might have influence on the streak
+			const currentQueueScore = await redis.zScore('streak-queue', postId);
+			if (currentQueueScore == postInfo['score']) { await redis.zRem('streak-queue', [postId]); } // Only remove the post from the queue if it has not been added again with a new score. That's because it gets added to the queue again if a post before it was deleted, which might have influence on the streak
 		}
 
 		const processingTime = Date.now() - startTimeCurrentPost;
@@ -161,18 +161,21 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 }
 
 export async function handleBackgroundStreak() {
-	let current_user_score = parseInt(await redis.get('background-task-tracker') || '0');
+	let currentUserScore = parseInt(await redis.get('background-task-tracker') || '0');
 	while (true) {
-		const current_user = (await redis.zRange('users', current_user_score, '+inf', { by: 'score' }))[0];
-		if (current_user == undefined) { return; }
+		const currentUser = (await redis.zRange('users', currentUserScore, '+inf', { by: 'score' }))[0];
+		if (currentUser == undefined) {
+			await redis.set('background-task-tracker', '0');
+			return;
+		}
 
-		const streaks = await calculateStreak(current_user.member);
+		const streaks = await calculateStreak(currentUser.member);
 
-		await redis.zAdd('current-streaks', { member: current_user.member, score: streaks.streak });
-		await redis.zAdd('current-COAD-streaks', { member: current_user.member, score: streaks.COAD_streak });
-		await updateUserFlair(current_user.member, Math.max(streaks.streak, streaks.COAD_streak));
+		await redis.zAdd('current-streaks', { member: currentUser.member, score: streaks.streak });
+		await redis.zAdd('current-COAD-streaks', { member: currentUser.member, score: streaks.CoadStreak });
+		await updateUserFlair(currentUser.member, Math.max(streaks.streak, streaks.CoadStreak));
 
-		current_user_score = current_user.score + 1;
-		await redis.set('background-task-tracker', current_user_score.toString());
+		currentUserScore = currentUser.score + 1;
+		await redis.set('background-task-tracker', currentUserScore.toString());
 	}
 }

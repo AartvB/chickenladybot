@@ -27,8 +27,9 @@ triggers.post('/on-app-upgrade', async (c) => {
 
   await redis.del('posts'); // FIXME: REMOVE THIS LINE! But for testing, empty the set of all posts
   await redis.del('posts-of-Aartvb') // FIXME: Remove this line as well, it's only for testing to reset the count of posts by the bot
-  await redis.del('new_post_queue'); // Clear the queue of new posts to be processed // FIXME: _ -> -
+  await redis.del('new-post-queue'); // Clear the queue of new posts to be processed
   await redis.del('streak-queue'); // Clear the queue of new posts to be processed
+  await redis.del('posts-per-user');
 
   await redis.set('streak-handler-lock', 'open'); // Ensure the lock for the new post handler is open so it can run after upgrade
   await redis.set('new-post-handler-lock', 'open'); // Ensure the lock for the new post handler is open so it can run after upgrade

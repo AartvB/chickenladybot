@@ -10,6 +10,7 @@ async function removePost(postId: T3) {
 	const postData = await redis.get(`post-info-${postId}`);
 	if (postData == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
 	const authorName = JSON.parse(postData).authorName;
+	const title = JSON.parse(postData).postNumber;
 	const timestamp = await redis.zScore('posts', postId);
 	if (timestamp == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
 
@@ -23,6 +24,33 @@ async function removePost(postId: T3) {
 	await addToEndOfQueue('streak-queue', postId);
 	const postsAfter = await redis.zRange('posts', timestamp, '+inf', {by: 'score'});
 	for (const postInfo of postsAfter) { await addToEndOfQueue('streak-queue', postInfo['member']); }
+
+	const currentPostsPerUser = await redis.zScore('posts-per-user', authorName) ?? 0;
+	await redis.zAdd('posts-per-user', { member: authorName, score: currentPostsPerUser - 1 });
+
+	let nZeroes = 1;
+	while (true) {
+		const zeroesString = '0'.repeat(nZeroes);
+		if (title.toString().endsWith(zeroesString)) {
+			await redis.zRem(`whole-count-1${zeroesString}-posts`, [postId]);
+			const currentUserCount = await redis.zScore(`whole-count-1${zeroesString}-users`, authorName) ?? 0;
+			await redis.zAdd(`whole-count-1${zeroesString}-users`, { member: authorName, score: currentUserCount - 1 });
+		}
+		else { break; }
+		nZeroes += 1;
+	}
+
+  if (/^(\d)\1+$/.test(title.toString())) {
+    await redis.zRem(`identical-digits-posts`, [postId]);
+    const currentUserCount = await redis.zScore(`identical-digits-users`, authorName) ?? 0;
+    await redis.zAdd(`identical-digits-users`, { member: authorName, score: currentUserCount - 1 });
+  }
+
+  if (title.toString() == title.toString().split('').reverse().join('')) {
+    await redis.zRem(`palindrome-posts`, [postId]);
+    const currentUserCount = await redis.zScore(`palindrome-users`, authorName) ?? 0;
+    await redis.zAdd(`palindrome-users`, { member: authorName, score: currentUserCount - 1 });
+  }
 
 	await redis.zAdd('deleted-posts', { member: postId, score: Date.now() });
 

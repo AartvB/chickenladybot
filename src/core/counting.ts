@@ -4,10 +4,38 @@ import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
 
 async function addPostToDatabase(postId: T3, postNumber: number, authorName: string, timestamp: number) {
+  const dateUTC = new Date(timestamp).toISOString().slice(0, 10);
   await redis.set('current-count', postNumber.toString());
   await redis.zAdd('posts', {member: postId, score: timestamp });
   await redis.zAdd(`posts-of-${authorName}`, { member: postId, score: timestamp });
-  await redis.set(`post-info-${postId}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString() }));
+  await redis.set(`post-info-${postId}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString(), 'date': dateUTC }));
+  const currentPostsPerUser = await redis.zScore('posts-per-user', authorName) ?? 0;
+  await redis.zAdd('posts-per-user', { member: authorName, score: currentPostsPerUser + 1 });
+
+	let nZeroes = 1;
+  while (true) {
+		const zeroesString = '0'.repeat(nZeroes);
+    if (postNumber.toString().endsWith(zeroesString)) {
+      await redis.zAdd(`whole-count-1${zeroesString}-posts`, { member: postId, score: postNumber });
+      const currentUserCount = await redis.zScore(`whole-count-1${zeroesString}-users`, authorName) ?? 0;
+      await redis.zAdd(`whole-count-1${zeroesString}-users`, { member: authorName, score: currentUserCount + 1 });
+      nZeroes += 1;
+    }
+    else { break; }
+  }
+
+  if (/^(\d)\1*$/.test(postNumber.toString())) {
+    await redis.zAdd(`identical-digits-posts`, { member: postId, score: postNumber });
+    const currentUserCount = await redis.zScore(`identical-digits-users`, authorName) ?? 0;
+    await redis.zAdd(`identical-digits-users`, { member: authorName, score: currentUserCount + 1 });
+  }
+
+  if (postNumber.toString() == postNumber.toString().split('').reverse().join('')) {
+    await redis.zAdd(`palindrome-posts`, { member: postId, score: postNumber });
+    const currentUserCount = await redis.zScore(`palindrome-users`, authorName) ?? 0;
+    await redis.zAdd(`palindrome-users`, { member: authorName, score: currentUserCount + 1 });
+  }
+
   if (await redis.zScore('users', authorName) == undefined) { await addToEndOfQueue('users', authorName); }
   await addToEndOfQueue('streak-queue', postId);
 }
@@ -27,15 +55,15 @@ async function removePost(postId: T3, commentText: string) {
 export async function handleNewPosts(): Promise<{ status: string; message: string; number: number }> {
   // TODO: Add extra disclaimer to removal reason if the delay between removal and the post being created is more than 2 minutes, to avoid confusion in case of a delay by reddit in removing the post
   const startTime = Date.now();
-  while (await redis.zCard('new_post_queue') > 0) {
+  while (await redis.zCard('new-post-queue') > 0) {
     const startTimeCurrentPost = Date.now();
-    const postInfo = (await redis.zRange('new_post_queue', -1, -1))[0];
+    const postInfo = (await redis.zRange('new-post-queue', -1, -1))[0];
     if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
     const postId = postInfo['member'];
 
     const post = await reddit.getPostById(postId as T3);
 
-    if (await isPostDeleted(post)) { await redis.zRem('new_post_queue', [postId]); continue; }
+    if (await isPostDeleted(post)) { await redis.zRem('new-post-queue', [postId]); continue; }
 
     const postTitle = post.title;
     if (/^\d+$/.test(postTitle)) {
@@ -108,7 +136,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
     }
     else {} // Valid post detected, but not added to the database since it's not a number
 
-    await redis.zRem('new_post_queue', [postId]);
+    await redis.zRem('new-post-queue', [postId]);
     const processingTime = Date.now() - startTimeCurrentPost;
     const timeLeft = 30000 - (Date.now() - startTime);
     if (timeLeft < processingTime * 1.5 || timeLeft < 10000) {
@@ -123,11 +151,11 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
   // FIXME: set variable below to 5 or 10
   // FIXME: Check if the latest checked post was posted earlier than the most recent post, to make sure there are not more simultaneous new posts
   const nSubsequentChecks = 0; // Number of extra subsequent existing posts to check when finding an existing post
-  let limit_str = await redis.get('new-post-limit');
-  if (limit_str == undefined) {
-    limit_str = '10';
+  let limitStr = await redis.get('new-post-limit');
+  if (limitStr == undefined) {
+    limitStr = '10';
   }
-  let limit = parseInt(limit_str); // Number of posts to check in each batch
+  let limit = parseInt(limitStr); // Number of posts to check in each batch
 
   const subreddit = await reddit.getSubredditInfoById(context.subredditId);
   if (subreddit.name == undefined) {
@@ -162,7 +190,7 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
       await redis.set('new-post-limit', '10'); // Reset limit to 10 for next check, since we successfully found all new posts with the current limit
       for (const [index, postId] of newPostIds.entries()) {
         const postTitle = (await reddit.getPostById(postId)).title;
-        await redis.zAdd('new_post_queue', { member: postId, score: index });
+        await redis.zAdd('new-post-queue', { member: postId, score: index });
       }
       return { status: 'ok', message: `Added ${newPostIds.length} new posts to the queue`, number: 200 };
     }

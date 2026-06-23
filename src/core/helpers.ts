@@ -18,16 +18,16 @@ export async function addToEndOfQueue(queueName: string, text: string): Promise<
 export async function updateTargetPost() {
   // Update the post that tells the user what the correct next number is.
 
-  const target_post_id = await redis.get('current-count-post-id');
-  if (target_post_id == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
-  let target_post = await reddit.getPostById(target_post_id as T3);
-  const current_count_string = await redis.get('current-count');
-  const current_count = parseInt(current_count_string || '0');
-  const subreddit_name = await redis.get('subredditname');
-  if (subreddit_name == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
+  const targetPostId = await redis.get('current-count-post-id');
+  if (targetPostId == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
+  let targetPost = await reddit.getPostById(targetPostId as T3);
+  const currentCountString = await redis.get('current-count');
+  const currentCount = parseInt(currentCountString || '0');
+  const subredditName = await redis.get('subredditname');
+  if (subredditName == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
 
-  const text = `The next number should be: [${current_count + 1}](https://www.reddit.com/r/${subreddit_name}/submit?title=${current_count + 1})` + await botExplainer();
-  await target_post.edit({ text: text });
+  const text = `The next number should be: [${currentCount + 1}](https://www.reddit.com/r/${subredditName}/submit?title=${currentCount + 1})` + await botExplainer();
+  await targetPost.edit({ text: text });
 
   return { status: 'ok', message: `Successfully processed new posts`, number: 200 }
 }

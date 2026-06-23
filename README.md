@@ -98,6 +98,7 @@ CLEANUP
 - remove deleted posts after 21 days
 - remove data from accounts that have been deleted
 - remove as much info as possible from posts that have been deleted
+- onPostDelete
 
 MOD functions
 - def fill_database_after_failure(self):
@@ -107,13 +108,3 @@ MOD functions
 - def delete_post(self):
 - def start_maintenance(self):
 - def end_maintenance(self):
-
-STATISTICS
-- def record_post_statistic(self, post_id):
-- def record_post_statistics(self, n_days_history = 21):
-- def update_count_leaderboard(self):
-- def update_whole_counts_leaderboard(self):
-- def update_top_posts_leaderboards(self):
-- def update_identical_digits_leaderboard(self):
-- def update_palindrome_leaderboard(self):
-- def update_streak_leaderboard(self):
