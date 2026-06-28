@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import type { OnAppInstallRequest, OnAppUpgradeRequest, TriggerResponse } from '@devvit/web/shared';
+import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, TriggerResponse } from '@devvit/web/shared';
 import { redis } from '@devvit/web/server';
+import { addToEndOfQueue, DBVersion } from '../core/helpers';
   
 export const triggers = new Hono();
 
@@ -8,12 +9,7 @@ triggers.post('/on-app-install', async (c) => {
   const input = await c.req.json<OnAppInstallRequest>();
   console.log('App installed to subreddit: r/' + input.subreddit?.name);
 
-  return c.json<TriggerResponse>(
-    {
-      status: 'success',
-    },
-    200
-  );
+  return c.json<TriggerResponse>({status: 'success',},200);
 });
 
 triggers.post('/on-app-upgrade', async (c) => {
@@ -40,22 +36,22 @@ triggers.post('/on-app-upgrade', async (c) => {
   await redis.set(`background-task-tracker-v${databaseVersion}`, '0'); // Reset the background task tracker, to ensure the bot starts with the correct task after upgrade
   // FIXME: set current-count to the correct count based on the existing posts in the subreddit, in case the bot was offline for a while and missed some posts.
 
-  return c.json<TriggerResponse>(
-    {
-      status: 'success',
-    },
-    200
-  );
+  return c.json<TriggerResponse>({status: 'success',},200);
 });
 
-/**
-triggers.post('/on-post-submit', async (c) => {
-  const input = await c.req.json<OnPostSubmitRequest>();
-  const post = input.post;
-  if (post == undefined) {
-    console.log('I was triggered for a new post, but no post was found!')
-    return;
-  }
-  checkPostCount(post.id);
+triggers.post('/on-post-delete', async (c) => {
+  const input = await c.req.json<OnPostDeleteRequest>();
+  const dbVersion = await DBVersion();
+  const postId = input.postId;
+  let timestamp_str = input.createdAt;
+  let timestamp: number;
+  if (timestamp_str) { timestamp = new Date(timestamp_str).getTime(); }
+  else { timestamp = await redis.zScore(`posts-v${dbVersion}`, postId) || Date.now(); }
+
+  console.log(`Post deleted: ${postId} at ${timestamp}. str: ${timestamp_str}`);
+
+  if (timestamp > Date.now() - 10 * 60000) { await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId); } // TODO: Remove magic number 10
+  else { await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, {member: postId, score: Date.now()}); }
+
+  return c.json<TriggerResponse>({status: 'success',}, 200);
 });
-*/

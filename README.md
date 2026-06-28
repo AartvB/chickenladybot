@@ -94,12 +94,6 @@ The template demonstrates Reddit mod tool development through the "Mop" feature:
 This template provides everything you need to build powerful, user-friendly moderation tools for Reddit communities.
 
 # FIXME: IMPLEMENT THE FOLLOWING FUNCTIONS
-CLEANUP
-- remove deleted posts after 21 days
-- remove data from accounts that have been deleted
-- remove as much info as possible from posts that have been deleted
-- onPostDelete
-
 MOD functions
 - def fill_database_after_failure(self):
 - def add_COAD_streak(self):

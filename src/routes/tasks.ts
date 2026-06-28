@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { handleBackgroundStreak, handleStreak } from '../core/streak';
 import { handleNewPosts, detectNewPosts } from '../core/counting';
-import { handleDeletedPosts } from '../core/deletion';
+import { handleCleanup, handleDeletedPosts } from '../core/deletion';
 import { handleLeaderboards } from '../core/leaderboards';
 import { DBVersion } from '../core/helpers';
 import { redis, type TaskResponse } from '@devvit/web/server';
@@ -72,15 +72,19 @@ tasks.post('background-task-handler', async (c) => {
   if (currentTask == 'flair') {
     await handleBackgroundStreak();
     await redis.set(`current-background-task-v${await DBVersion()}`, 'leaderboard');
+    await redis.del(`background-task-tracker-v${await DBVersion()}`);
   }
   else if (currentTask == 'leaderboard') {
     await handleLeaderboards();
     await redis.set(`current-background-task-v${await DBVersion()}`, 'cleanup');
+    await redis.del(`background-task-tracker-v${await DBVersion()}`);
   }
   else if (currentTask == 'cleanup') {
-    // FIXME: Implement cleanup logic here
-    await redis.set(`current-background-task-v${await DBVersion()}`, 'flair');
+    if (await handleCleanup()) {
+      await redis.set(`current-background-task-v${await DBVersion()}`, 'flair');
+      await redis.del(`background-task-tracker-v${await DBVersion()}`);
+    }
   }
-  await redis.del(`background-task-tracker-v${await DBVersion()}`);
-  return c.json<TaskResponse>({ status: 'success', message: `Background task ${currentTask} completed`, number: 200 });
+
+  return c.json<TaskResponse>({ status: 'success', message: `Worked on background task ${currentTask}`, number: 200 });
 });

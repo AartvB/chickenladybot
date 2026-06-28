@@ -5,6 +5,12 @@ import { Post } from '@devvit/web/server';
 
 export async function botExplainer(): Promise<string> { return "\n\n^(This piece of content has been created automatically by a bot. If you think it made a mistake, [contact the mods](https://www.reddit.com/message/compose/?to=/r/countwithchickenlady) via modmail. The code for this bot is fully open source, and can be found [here](https://github.com/AartvB/chickenladybot).)"; }
 export async function isPostDeleted(post: Post): Promise<boolean> { return post.authorName == '[deleted]' || post.removed; }
+export async function isPostDeletedEarly(postId: T3): Promise<boolean> {
+  const dbVersion = await DBVersion();
+  const isInEarlyQueue = await redis.zScore(`early-deleted-post-queue-v${dbVersion}`, postId) != undefined;
+  const earlyDeleted = await redis.zScore(`early-deleted-posts-v${dbVersion}`, postId) != undefined;
+  return isInEarlyQueue || earlyDeleted;
+}
 export async function DBVersion(): Promise<string> { return await redis.get('database-version') ?? '1'; }
 export async function DBkey(key: string): Promise<string> { const dbVersion = await DBVersion(); return `${key}-v${dbVersion}`; }
 
@@ -30,4 +36,17 @@ export async function updateTargetPost() {
   await targetPost.edit({ text: text });
 
   return { status: 'ok', message: `Successfully processed new posts`, number: 200 }
+}
+
+export class Timer {
+  private startTimeTask: number = Date.now();
+  constructor(private timeToStop: number = 10000, private maxTime: number = 30000, private multiplier: number = 1.5, private startTime: number = Date.now()) {}
+  reset() { this.startTime = Date.now(); }
+  startNextTask() { this.startTimeTask = Date.now(); }
+  endTask(): boolean { 
+    const processingTime = Date.now() - this.startTimeTask;
+    const totalProcessingTime = Date.now() - this.startTime;
+    const timeLeft = this.maxTime - totalProcessingTime;
+    return timeLeft < processingTime * this.multiplier || timeLeft < this.timeToStop;
+  }
 }

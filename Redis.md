@@ -7,9 +7,10 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 ## Sorted sets
 - **users**: Contains all usernames of users that have posted to the sub. Sorted based on time of first post. Score is an integer, counting up.
 - **posts**: Contains all ids of posts that have been approved. Does not contain deleted posts. Score is the timestamp of posting.
-- **deleted-posts**: Contains all ids of posts that were approved, but have been deleted within 10 minutes of posting. The score is the timestamp of posting. Data is removed after 21 days.
+- **early-deleted-posts**: Contains all ids of posts that were approved, but have been deleted within 10 minutes of posting. The score is the timestamp of posting. Data is removed after 21 days.
 - **new-post-queue**: Contains all ids of posts that were posted, but not yet approved.
-- **deleted-post-queue**: Contains all ids of posts that were deleted within 10 minutes, but not yet removed from the database.
+- **early-deleted-post-queue**: Contains all ids of posts that were deleted within 10 minutes, but not yet removed from the database.
+- **late-deleted-post-queue**: Contains all ids of posts that were deleted after 10 minutes, but not yet removed from the database. Score is the timestamp of deletion.
 - **streak-queue**: Contains all ids of posts for which the streak must be calculated.
 - **current-streaks**: Contains all user ids. The score is their streak.
 - **current-COAD-streaks**: Conatins all user ids. The score is their COAD-streak.

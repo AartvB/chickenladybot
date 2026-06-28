@@ -1,4 +1,4 @@
-import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion } from './helpers';
+import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, Timer } from './helpers';
 import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
@@ -10,8 +10,7 @@ async function addPostToDatabase(postId: T3, postNumber: number, authorName: str
   await redis.zAdd(`posts-v${dbVersion}`, {member: postId, score: timestamp });
   await redis.zAdd(`posts-of-${authorName}-v${dbVersion}`, { member: postId, score: timestamp });
   await redis.set(`post-info-${postId}-v${dbVersion}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString(), 'date': dateUTC }));
-  const currentPostsPerUser = await redis.zScore(`posts-per-user-v${dbVersion}`, authorName) ?? 0;
-  await redis.zAdd(`posts-per-user-v${dbVersion}`, { member: authorName, score: currentPostsPerUser + 1 });
+  await redis.zAdd(`posts-per-user-v${dbVersion}`, { member: authorName, score: await redis.zCard(`posts-of-${authorName}-v${dbVersion}`) });
 
 	let nZeroes = 1;
   while (true) {
@@ -54,10 +53,10 @@ async function removePost(postId: T3, commentText: string) {
 }
 
 export async function handleNewPosts(): Promise<{ status: string; message: string; number: number }> {
-  const startTime = Date.now();
+  let timer = new Timer();
   const dbVersion = await DBVersion();
   while (await redis.zCard(`new-post-queue-v${dbVersion}`) > 0) {
-    const startTimeCurrentPost = Date.now();
+    timer.startNextTask();
     const postInfo = (await redis.zRange(`new-post-queue-v${dbVersion}`, -1, -1))[0];
     if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
     const postId = postInfo['member'];
@@ -82,8 +81,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
         for (const postInfo of earlierPosts) {
           const earlierPostId = postInfo['member'];
           const earlierPost = await reddit.getPostById(earlierPostId as T3);
-          if (await isPostDeleted(earlierPost) && postInfo['score'] > Date.now() - 10 * 60000) { await addToEndOfQueue(`deleted-post-queue-v${dbVersion}`, earlierPostId); continue; }
-          // TODO: Remove magic number 10 in line above
+          if (await isPostDeletedEarly(earlierPostId as T3)) { continue; }
           postDateTimes.push([earlierPostId, postInfo['score']]);
           if (postDateTimes.length == 3) { break; } // Only use the two most recent posts
         }
@@ -138,11 +136,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
     else {} // Valid post detected, but not added to the database since it's not a number
 
     await redis.zRem(`new-post-queue-v${dbVersion}`, [postId]);
-    const processingTime = Date.now() - startTimeCurrentPost;
-    const timeLeft = 30000 - (Date.now() - startTime);
-    if (timeLeft < processingTime * 1.5 || timeLeft < 10000) {
-      break; // Stop processing more posts if we are running out of time, to ensure we finish before the time-out of 30 seconds.
-    }
+    if (timer.endTask()) { break; }
   }
   const result = updateTargetPost();
   return result;
@@ -191,7 +185,6 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
     else {
       await redis.set(`new-post-limit-v${dbVersion}`, '10'); // Reset limit to 10 for next check, since we successfully found all new posts with the current limit
       for (const [index, postId] of newPostIds.entries()) {
-        const postTitle = (await reddit.getPostById(postId)).title;
         await redis.zAdd(`new-post-queue-v${dbVersion}`, { member: postId, score: index });
       }
       return { status: 'ok', message: `Added ${newPostIds.length} new posts to the queue`, number: 200 };

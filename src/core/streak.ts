@@ -1,5 +1,5 @@
 import { context, reddit } from '@devvit/web/server';
-import { isPostDeleted, addToEndOfQueue, DBVersion } from './helpers';
+import { isPostDeletedEarly, addToEndOfQueue, DBVersion, Timer } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
@@ -121,10 +121,10 @@ async function updateUserFlair(username: string, streak: number) {
 export async function handleStreak(): Promise<{ status: string; message: string; number: number }> {
 	// Only removes from the beginning of the queue
   const dbVersion = await DBVersion();
-  const startTime = Date.now();
+  let timer = new Timer();
 	
   while (await redis.zCard(`streak-queue-v${dbVersion}`) > 0) {
-    const startTimeCurrentPost = Date.now();
+    timer.startNextTask();
     const postInfo = (await redis.zRange(`streak-queue-v${dbVersion}`, 0, 0))[0];
     if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
     const postId = postInfo['member'];
@@ -139,10 +139,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 		await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, { member: username, score: streak.CoadStreak });
 		await updateUserFlair(username, Math.max(streak.streak, streak.CoadStreak));
 
-		if (await isPostDeleted(post)) {
-			await addToEndOfQueue(`deleted-post-queue-v${dbVersion}`, postId);
-			await redis.zRem(`streak-queue-v${dbVersion}`, [postId]);
-		}
+		if (await isPostDeletedEarly(postId as T3)) { await redis.zRem(`streak-queue-v${dbVersion}`, [postId]); }
 		else {
 			await redis.zAdd(`post-streaks-v${dbVersion}`, { member: postId, score: streak.streak });
 			await redis.zAdd(`post-COAD-streaks-v${dbVersion}`, { member: postId, score: streak.CoadStreak });
@@ -151,22 +148,17 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 			if (currentQueueScore == postInfo['score']) { await redis.zRem(`streak-queue-v${dbVersion}`, [postId]); } // Only remove the post from the queue if it has not been added again with a new score. That's because it gets added to the queue again if a post before it was deleted, which might have influence on the streak
 		}
 
-		const processingTime = Date.now() - startTimeCurrentPost;
-    const timeLeft = 30000 - (Date.now() - startTime);
-    if (timeLeft < processingTime * 1.5 || timeLeft < 10000) {
-      break; // Stop processing more posts if we are running out of time, to ensure we finish before the time-out of 30 seconds.
-    }
+		if (timer.endTask()) { break; }
 	}
 	return { status: 'success', message: `Streaks calculated`, number: 200 };
 }
 
 export async function handleBackgroundStreak() {
   const dbVersion = await DBVersion();
-	let currentUserScore = parseInt(await redis.get(`background-task-tracker-v${dbVersion}`) || '0');
+	let currentUserScore = parseInt(await redis.get(`background-task-tracker-v${dbVersion}`) ?? '0');
 	while (true) {
 		const currentUser = (await redis.zRange(`users-v${dbVersion}`, currentUserScore, '+inf', { by: 'score' }))[0];
 		if (currentUser == undefined) {
-			await redis.set(`background-task-tracker-v${dbVersion}`, '0');
 			return;
 		}
 
