@@ -40,8 +40,8 @@ export async function updateTargetPost() {
 
 export class Timer {
   private startTimeTask: number = Date.now();
-  constructor(private timeToStop: number = 10000, private maxTime: number = 30000, private multiplier: number = 1.5, private startTime: number = Date.now()) {}
-  reset() { this.startTime = Date.now(); }
+  constructor(private timeToStop: number = 10000, private maxTime: number = 30000, private multiplier: number = 1.5, private startTime: number = Date.now()) { this.startNextTask(); }
+  reset() { this.startTime = Date.now(); this.startNextTask(); }
   startNextTask() { this.startTimeTask = Date.now(); }
   endTask(): boolean { 
     const processingTime = Date.now() - this.startTimeTask;

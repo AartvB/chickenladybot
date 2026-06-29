@@ -68,7 +68,6 @@ tasks.post('background-task-handler', async (c) => {
   // It takes many calls to finish a task, and when it finishes a task, it continues with the next task.
 
   const currentTask = await redis.get(`current-background-task-v${await DBVersion()}`);
-  console.log(`Current background task: ${currentTask}`);
   if (currentTask == 'flair') {
     await handleBackgroundStreak();
     await redis.set(`current-background-task-v${await DBVersion()}`, 'leaderboard');

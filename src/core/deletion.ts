@@ -1,15 +1,13 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 import { reddit } from '@devvit/web/server';
-import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, Timer } from './helpers';
+import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, Timer, isPostDeletedEarly } from './helpers';
 
 async function removePostFromDatabase(postId: T3, early_removal: boolean) {
 	const dbVersion = await DBVersion();
 
-	if (early_removal) {    
-		const alreadyDeleted = await redis.zScore(`early-deleted-posts-v${dbVersion}`, postId) != undefined;
-		if (alreadyDeleted) { await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId]); return; }
-	}
+	const alreadyDeletedEarly = await redis.zScore(`early-deleted-posts-v${dbVersion}`, postId) != undefined;
+	if (alreadyDeletedEarly) { await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId]); await redis.zRem(`late-deleted-post-queue-v${dbVersion}`, [postId]); return; }
 
 	const postData = await redis.get(`post-info-${postId}-v${dbVersion}`) || '{"authorName": "[deleted]", "postNumber": 0}';
 	const authorName = JSON.parse(postData).authorName;
@@ -98,16 +96,28 @@ export async function handleDeletedPosts() {
 // Only removes from the beginning of the queue
 	let timer = new Timer();
 	const dbVersion = await DBVersion();
+
+	const tenMinutesAgo = Date.now() - 10 * 60 * 1000; // Remove magic number 10
+	const recentPosts = await redis.zRange(`posts-v${dbVersion}`, tenMinutesAgo, '+inf', { by: 'score' });	
+	for (const postInfo of recentPosts) {
+		const postId = postInfo['member'];
+		const post = await reddit.getPostById(postId as T3);
+		if (await isPostDeleted(post) && !(await isPostDeletedEarly(postId as T3))) { 
+			await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId);
+		}
+	}
+
+	if (timer.endTask()) { return { status: 'warning', message: 'Processing time is approaching the limit, stopping to avoid timeout. Remaining posts will be handled in the next run.', number: 200 }; }
+
   while (await redis.zCard(`early-deleted-post-queue-v${dbVersion}`) > 0) {
     timer.startNextTask();
     const postInfo = (await redis.zRange(`early-deleted-post-queue-v${dbVersion}`, 0, 0))[0];
     if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
 		const postId = postInfo['member'];
 
-		await redis.zAdd(`early-deleted-posts-v${dbVersion}`, { member: postId, score: Date.now() });
-
 		await removePostFromDatabase(postId as T3, true);
 
+		await redis.zAdd(`early-deleted-posts-v${dbVersion}`, { member: postId, score: Date.now() });
 		await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId]);
 
 		if (timer.endTask()) {
@@ -198,5 +208,7 @@ export async function handleCleanup(): Promise<boolean> {
 			await redis.set(`background-task-tracker-v${dbVersion}`, `early-posts-${postToDelete['score']}`);
 		}
 	}
+
+	// TODO: Look at all historical data older than 21 days and add any deleted posts that are not yet in the early or late deleted posts queue to the late deleted posts queue
 	return true
 }

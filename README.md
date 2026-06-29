@@ -94,6 +94,9 @@ The template demonstrates Reddit mod tool development through the "Mop" feature:
 This template provides everything you need to build powerful, user-friendly moderation tools for Reddit communities.
 
 # FIXME: IMPLEMENT THE FOLLOWING FUNCTIONS
+Deletion:
+- Check every x seconds if a moderator deleted a post within 10 minutes. Add it to the relevant queue.
+
 MOD functions
 - def fill_database_after_failure(self):
 - def add_COAD_streak(self):

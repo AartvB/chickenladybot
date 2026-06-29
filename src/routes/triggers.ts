@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, TriggerResponse } from '@devvit/web/shared';
-import { redis } from '@devvit/web/server';
-import { addToEndOfQueue, DBVersion } from '../core/helpers';
+import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
+import { reddit, redis } from '@devvit/web/server';
+import { addToEndOfQueue, botExplainer, DBVersion, isPostDeletedEarly } from '../core/helpers';
   
 export const triggers = new Hono();
 
@@ -48,10 +48,13 @@ triggers.post('/on-post-delete', async (c) => {
   if (timestamp_str) { timestamp = new Date(timestamp_str).getTime(); }
   else { timestamp = await redis.zScore(`posts-v${dbVersion}`, postId) || Date.now(); }
 
-  console.log(`Post deleted: ${postId} at ${timestamp}. str: ${timestamp_str}`);
-
   if (timestamp > Date.now() - 10 * 60000) { await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId); } // TODO: Remove magic number 10
-  else { await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, {member: postId, score: Date.now()}); }
+  else if (!(await isPostDeletedEarly(postId as T3))) { 
+    await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, {member: postId, score: Date.now()});
+    let message = `This post has been removed by you or a moderator after 10 minutes of posting it. Therefore this post will still count as your post for this day and keeps contributing to your streak. You may post again at the next calendar day.` // TODO: Remove magic number 10
+    message += await botExplainer();
+    await reddit.submitComment({id: postId as T3, text: message, runAs: 'APP'});
+  }
 
   return c.json<TriggerResponse>({status: 'success',}, 200);
 });
