@@ -55,12 +55,12 @@ tasks.post('/deleted-post-handler', async (c) => {
     }
   }
   await redis.set(lockKey, now.toString());
-  const result = await handleDeletedPosts();
+  await handleDeletedPosts();
   await redis.set(lockKey, 'open');
-  return c.json<TaskResponse>({ status: result['status'], message: result['message']}, result['number'] as ContentfulStatusCode);
+  return c.json<TaskResponse>({ status: 'success', message: `Worked on deleted posts`, number: 200 });
 });
 
-tasks.post('background-task-handler', async (c) => {
+tasks.post('/background-task-handler', async (c) => {
   // Handles tasks that are not time-sensitive. It performs 3 tasks: 'flair', 'leaderboard' and 'cleanup'.
   // Flair: Check flair of all users if it is still accurate. If a user has not posted for too long, their streak should be reset to 0.
   // Leaderboard: Update the leaderboard statistics and update the leaderboard.
@@ -69,14 +69,16 @@ tasks.post('background-task-handler', async (c) => {
 
   const currentTask = await redis.get(`current-background-task-v${await DBVersion()}`);
   if (currentTask == 'flair') {
-    await handleBackgroundStreak();
-    await redis.set(`current-background-task-v${await DBVersion()}`, 'leaderboard');
-    await redis.del(`background-task-tracker-v${await DBVersion()}`);
+    if (await handleBackgroundStreak()) {
+      await redis.set(`current-background-task-v${await DBVersion()}`, 'leaderboard');
+      await redis.del(`background-task-tracker-v${await DBVersion()}`);
+    }
   }
   else if (currentTask == 'leaderboard') {
-    await handleLeaderboards();
-    await redis.set(`current-background-task-v${await DBVersion()}`, 'cleanup');
-    await redis.del(`background-task-tracker-v${await DBVersion()}`);
+    if (await handleLeaderboards()) {
+      await redis.set(`current-background-task-v${await DBVersion()}`, 'cleanup');
+      await redis.del(`background-task-tracker-v${await DBVersion()}`);
+    }
   }
   else if (currentTask == 'cleanup') {
     if (await handleCleanup()) {

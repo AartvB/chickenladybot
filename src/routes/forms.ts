@@ -1,115 +1,63 @@
 import { Hono } from 'hono';
 import type { UiResponse } from '@devvit/web/shared';
-import { context } from '@devvit/web/server';
-import { isT1, isT3 } from '@devvit/shared-types/tid.js';
-import { handleNuke, handleNukePost } from '../core/nuke';
-
-/** Everything below this is from the template! */
-type NukeFormValues = {
-  remove?: boolean;
-  lock?: boolean;
-  skipDistinguished?: boolean;
-  targetId?: string;
-};
+import { redis } from '@devvit/web/server';
+import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown } from '../core/helpers';
 
 export const forms = new Hono();
 
-const normalizeValues = (values: NukeFormValues) => ({
-  remove: Boolean(values.remove),
-  lock: Boolean(values.lock),
-  skipDistinguished: Boolean(values.skipDistinguished),
+// FIXME: Actually implement the shutdown functionality. Also implement it in Timer, which should be renamed to 
+
+forms.post('/deactivate-hard-shutdown', async (c) => {
+  if (await isInHardShutdown()) {
+    const values = await c.req.json<{softShutdown: boolean}>();
+    let uiResponse: string;
+    if (values.softShutdown) {
+      await redis.set(`shutdown-lock-v${await DBVersion()}`, 'soft');
+      uiResponse = 'Hard shutdown mode ended. The bot is now in soft shutdown mode.';
+    }
+    else {
+      await redis.set(`shutdown-lock-v${await DBVersion()}`, 'open');
+      uiResponse = 'Hard shutdown mode ended. The bot is now running normally.';
+    }
+      await updateTargetPost();
+    return c.json<UiResponse>({ showToast: uiResponse }, 200);
+  }
+  else { return c.json<UiResponse>({ showToast: 'The bot is not in hard shutdown mode (anymore), so there is nothing to deactivate.',}, 200); }
 });
 
-const getTargetId = (values: NukeFormValues) => {
-  if (typeof values.targetId === 'string' && values.targetId.trim()) {
-    return values.targetId.trim();
+forms.post('/handle-soft-shutdown', async (c) => {
+  if (await isInSoftShutdown()) {
+    const values = await c.req.json<{shutdownChoice: string}>();
+    let uiResponse: string;
+    if (values.shutdownChoice == 'end') {
+      await redis.set(`shutdown-lock-v${await DBVersion()}`, 'open');
+      uiResponse = 'Soft shutdown mode ended. The bot is now running normally.';
+    }
+    else if (values.shutdownChoice == 'hard') {
+      await redis.set(`shutdown-lock-v${await DBVersion()}`, 'hard');
+      uiResponse = 'Soft shutdown mode ended. The bot is now in hard shutdown mode.';
+    }
+    else { return c.json<UiResponse>({ showToast: 'Invalid choice. Please try again.',}, 200); }
+    await updateTargetPost();
+    return c.json<UiResponse>({ showToast: uiResponse }, 200);
   }
-
-  return context.postId;
-};
-
-forms.post('/mop-comment-submit', async (c) => {
-  const values = await c.req.json<NukeFormValues>();
-  console.log('values', values);
-  const normalized = normalizeValues(values);
-
-  if (!normalized.lock && !normalized.remove) {
-    return c.json<UiResponse>(
-      {
-        showToast: 'You must select either lock or remove.',
-      },
-      200
-    );
-  }
-
-  const targetId = getTargetId(values);
-  if (!isT1(targetId)) {
-    console.error('targetId is not a T1', targetId);
-    return c.json<UiResponse>(
-      {
-        showToast: 'Mop failed! Please try again later.',
-      },
-      200
-    );
-  }
-
-  const result = await handleNuke({
-    ...normalized,
-    commentId: targetId,
-    subredditId: context.subredditId,
-  });
-
-  console.log(
-    `Mop result - ${result.success ? 'success' : 'fail'} - ${result.message}`
-  );
-
-  return c.json<UiResponse>(
-    {
-      showToast: `${result.success ? 'Success' : 'Failed'} : ${result.message}`,
-    },
-    200
-  );
+  else { return c.json<UiResponse>({ showToast: 'The bot is not in soft shutdown mode (anymore), so there is nothing to handle.',}, 200); }
 });
 
-forms.post('/mop-post-submit', async (c) => {
-  const values = await c.req.json<NukeFormValues>();
-  console.log('values', values);
-  const normalized = normalizeValues(values);
-
-  if (!normalized.lock && !normalized.remove) {
-    return c.json<UiResponse>(
-      {
-        showToast: 'You must select either lock or remove.',
-      },
-      200
-    );
+forms.post('/activate-shutdown', async (c) => {
+  if (await isInSoftShutdown()) { return c.json<UiResponse>({ showToast: 'The bot is already in shutdown mode, so there is nothing to activate.',}, 200); }
+  else {
+    const values = await c.req.json<{hardShutdown: boolean}>();
+    let uiResponse: string;
+    if (values.hardShutdown) {
+      await redis.set(`shutdown-lock-v${await DBVersion()}`, 'hard');
+      uiResponse = 'Hard shutdown mode activated. The bot will not process any new posts.';
+    }
+    else {
+      await redis.set(`shutdown-lock-v${await DBVersion()}`, 'soft');
+      uiResponse = 'Soft shutdown mode activated. The bot will not process any new posts.';
+    }
+    await updateTargetPost();
+    return c.json<UiResponse>({ showToast: uiResponse }, 200);
   }
-
-  const targetId = getTargetId(values);
-  if (!isT3(targetId)) {
-    console.error('targetId is not a T3', targetId);
-    return c.json<UiResponse>(
-      {
-        showToast: 'Mop failed! Please try again later.',
-      },
-      200
-    );
-  }
-
-  const result = await handleNukePost({
-    ...normalized,
-    postId: targetId,
-    subredditId: context.subredditId,
-  });
-
-  console.log(
-    `Mop result - ${result.success ? 'success' : 'fail'} - ${result.message}`
-  );
-
-  return c.json<UiResponse>(
-    {
-      showToast: `${result.success ? 'Success' : 'Failed'} : ${result.message}`,
-    },
-    200
-  );
 });

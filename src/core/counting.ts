@@ -1,4 +1,4 @@
-import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, Timer } from './helpers';
+import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler } from './helpers';
 import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
@@ -53,10 +53,10 @@ async function removePost(postId: T3, commentText: string) {
 }
 
 export async function handleNewPosts(): Promise<{ status: string; message: string; number: number }> {
-  let timer = new Timer();
+  let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+  if (await taskScheduler.endTask()) { return { status: 'error', message: 'Background task stopped due to time limit or shutdown', number: 503 }; }
   const dbVersion = await DBVersion();
-  while (await redis.zCard(`new-post-queue-v${dbVersion}`) > 0) {
-    timer.startNextTask();
+  while (await redis.zCard(`new-post-queue-v${dbVersion}`) > 0 && await taskScheduler.startNextTask()) {
     const postInfo = (await redis.zRange(`new-post-queue-v${dbVersion}`, -1, -1))[0];
     if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
     const postId = postInfo['member'];
@@ -80,7 +80,6 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
         let earlierPosts = (await redis.zRange(`posts-of-${post.authorName}-v${dbVersion}`, -20, -1)).reverse();
         for (const postInfo of earlierPosts) {
           const earlierPostId = postInfo['member'];
-          const earlierPost = await reddit.getPostById(earlierPostId as T3);
           if (await isPostDeletedEarly(earlierPostId as T3)) { continue; }
           postDateTimes.push([earlierPostId, postInfo['score']]);
           if (postDateTimes.length == 3) { break; } // Only use the two most recent posts
@@ -136,15 +135,15 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
     else {} // Valid post detected, but not added to the database since it's not a number
 
     await redis.zRem(`new-post-queue-v${dbVersion}`, [postId]);
-    if (timer.endTask()) { break; }
   }
-  const result = updateTargetPost();
+  const result = await updateTargetPost();
   return result;
 }
 
 export async function detectNewPosts(): Promise<{ message: string; status: string; number: number }> {
   // FIXME: set variable below to 5 or 10
-  // FIXME: Check if the latest checked post was posted earlier than the most recent post, to make sure there are not more simultaneous new posts
+  let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+  if (await taskScheduler.endTask()) { return { status: 'error', message: 'Background task stopped due to time limit or shutdown', number: 503 }; }
   const dbVersion = await DBVersion();
   const nSubsequentChecks = 0; // Number of extra subsequent existing posts to check when finding an existing post
   let limitStr = await redis.get(`new-post-limit-v${dbVersion}`);
@@ -158,7 +157,7 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
     return { status: 'error', message: 'Subreddit not found', number: 404 };
   }
 
-  while (true) {
+  while (true && await taskScheduler.startNextTask()) {
     const posts = await reddit.getNewPosts({
       subredditName: subreddit.name,
       limit: limit
@@ -190,4 +189,5 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
       return { status: 'ok', message: `Added ${newPostIds.length} new posts to the queue`, number: 200 };
     }
   }
+  return { status: 'error', message: 'Background task stopped due to time limit or shutdown', number: 503 };
 }

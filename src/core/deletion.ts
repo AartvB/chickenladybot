@@ -1,7 +1,7 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 import { reddit } from '@devvit/web/server';
-import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, Timer, isPostDeletedEarly } from './helpers';
+import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly } from './helpers';
 
 async function removePostFromDatabase(postId: T3, early_removal: boolean) {
 	const dbVersion = await DBVersion();
@@ -94,7 +94,8 @@ async function removePostFromDatabase(postId: T3, early_removal: boolean) {
 export async function handleDeletedPosts() {
 // Handles posts that have been deleted within 10 minutes of posting
 // Only removes from the beginning of the queue
-	let timer = new Timer();
+	let taskScheduler = new TaskScheduler({});
+	if (await taskScheduler.endTask()) { return false; }
 	const dbVersion = await DBVersion();
 
 	const tenMinutesAgo = Date.now() - 10 * 60 * 1000; // Remove magic number 10
@@ -107,12 +108,10 @@ export async function handleDeletedPosts() {
 		}
 	}
 
-	if (timer.endTask()) { return { status: 'warning', message: 'Processing time is approaching the limit, stopping to avoid timeout. Remaining posts will be handled in the next run.', number: 200 }; }
-
   while (await redis.zCard(`early-deleted-post-queue-v${dbVersion}`) > 0) {
-    timer.startNextTask();
+    if (!await taskScheduler.startNextTask()) { return false; }
     const postInfo = (await redis.zRange(`early-deleted-post-queue-v${dbVersion}`, 0, 0))[0];
-    if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
+    if (postInfo == undefined) { return false; }
 		const postId = postInfo['member'];
 
 		await removePostFromDatabase(postId as T3, true);
@@ -120,12 +119,12 @@ export async function handleDeletedPosts() {
 		await redis.zAdd(`early-deleted-posts-v${dbVersion}`, { member: postId, score: Date.now() });
 		await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId]);
 
-		if (timer.endTask()) {
-			return { status: 'warning', message: 'Processing time is approaching the limit, stopping to avoid timeout. Remaining posts will be handled in the next run.', number: 200 };
+		if (await taskScheduler.endTask()) {
+			return false;
 		}
 	}
 
-	return { status: 'ok', message: 'Successfully processed deleted posts', number: 200 };
+	return true
 }
 async function removeUserInfo(username: string) {
 	const dbVersion = await DBVersion();
@@ -151,10 +150,10 @@ async function removeUserInfo(username: string) {
 }
 export async function handleCleanup(): Promise<boolean> {
 // Remove post data from the database if the post has been deleted for more than 21 days, to protect user privacy. Also remove data from accounts that have no posts left on the subreddit.
+	let taskScheduler = new TaskScheduler( { stopAtSoftShutdown: true });
+	if (await taskScheduler.endTask()) { return false; }
+
 	const dbVersion = await DBVersion();
-
-	let timer = new Timer();
-
 	let currentTask = await redis.get(`background-task-tracker-v${dbVersion}`) ?? 'late-posts-0';
 	if (/^late-posts-(\d+)$/.test(currentTask)) {
 		const currentPostScore = parseInt(currentTask.split('late-posts-')[1] ?? '0');
@@ -162,7 +161,7 @@ export async function handleCleanup(): Promise<boolean> {
 		const endPostScore = now - 21 * 24 * 60 * 60 * 1000; // End 21 days ago
 
 		while (true) {
-			timer.startNextTask();
+			if (!await taskScheduler.startNextTask()) { return false; }
 			const postToDelete = (await redis.zRange(`late-deleted-posts-v${dbVersion}`, currentPostScore, endPostScore, { by: 'score' }))[0];
 			if (postToDelete == undefined) {
 				currentTask = 'early-posts-0';
@@ -189,8 +188,6 @@ export async function handleCleanup(): Promise<boolean> {
 
 			await redis.zRem(`late-deleted-posts-v${dbVersion}`, [postId]);
 			await redis.set(`background-task-tracker-v${dbVersion}`, `late-posts-${postToDelete['score']}`);
-
-			if (timer.endTask()) { return false; }
 		}
 	}
 	if (/^early-posts-(\d+)$/.test(currentTask)) {
@@ -199,6 +196,7 @@ export async function handleCleanup(): Promise<boolean> {
 		const endPostScore = now - 21 * 24 * 60 * 60 * 1000; // End 21 days ago
 
 		while (true) {
+			if (!await taskScheduler.startNextTask()) { return false; }
 			const postToDelete = (await redis.zRange(`early-deleted-posts-v${dbVersion}`, currentPostScore, endPostScore, { by: 'score' }))[0];
 			if (postToDelete == undefined) { break; }
 			const postId = postToDelete['member'];

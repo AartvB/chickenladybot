@@ -1,7 +1,7 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 import { context, reddit } from '@devvit/web/server';
-import { DBVersion } from './helpers';
+import { DBVersion, TaskScheduler } from './helpers';
 
 // FIXME: All leaderboards: check if they are in the correct order!
 
@@ -292,6 +292,8 @@ async function updateStreakLeaderboard() {
 }
 
 export async function handleLeaderboards() {
+	let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+	if (await taskScheduler.endTask()) { return false; }
 	const dbVersion = await DBVersion();
 	let currentTask = await redis.get(`background-task-tracker-v${dbVersion}`) ?? 'posts-0';
 	if (/^posts-(\d+)$/.test(currentTask)) {
@@ -301,6 +303,7 @@ export async function handleLeaderboards() {
 			currentPostScore = now - 21 * 24 * 60 * 60 * 1000; // Start from 21 days ago
 		}
 		while (true) {
+			if (!await taskScheduler.startNextTask()) { return false; }
 			const currentPost = (await redis.zRange(`posts-v${dbVersion}`, currentPostScore, '+inf', { by: 'score' }))[0];
 			if (currentPost == undefined) { 
 				currentTask = 'users-0';
@@ -321,6 +324,7 @@ export async function handleLeaderboards() {
 		}
 	}
 	if (/^users-(\d+)$/.test(currentTask)) {
+		if (!await taskScheduler.startNextTask()) { return false; }
 		let currentUserScore = parseInt(currentTask.split('-')[1] ?? '0');
 		while (true) {
 			const currentUser = (await redis.zRange(`users-v${dbVersion}`, currentUserScore, '+inf', { by: 'score' }))[0];
@@ -346,36 +350,44 @@ export async function handleLeaderboards() {
 		}
 	}
 	if (currentTask == 'count') {
+		if (!await taskScheduler.startNextTask()) { return false; }
 		await updateCountLeaderboard();
 		currentTask = 'wholeCounts';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'wholeCounts') {
+		if (!await taskScheduler.startNextTask()) { return false; }
 		await updateWholeCountsLeaderboards();
 		currentTask = 'mostComments';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'mostComments') {
+		if (!await taskScheduler.startNextTask()) { return false; }
 		await updateMostCommentsLeaderboard();
 		currentTask = 'mostUpvotes';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'mostUpvotes') {
+		if (!await taskScheduler.startNextTask()) { return false; }
 		await updateMostUpvotesLeaderboard();
 		currentTask = 'identicalDigits';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'identicalDigits') {
+		if (!await taskScheduler.startNextTask()) { return false; }
 		await updateIdenticalDigitsLeaderboard();
 		currentTask = 'palindrome';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'palindrome') {
+		if (!await taskScheduler.startNextTask()) { return false; }
 		await updatePalindromeLeaderboard();
 		currentTask = 'streak';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'streak') {
+		if (!await taskScheduler.startNextTask()) { return false; }
 		await updateStreakLeaderboard();
 	}
+	return true;
 }

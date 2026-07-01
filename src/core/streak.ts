@@ -1,5 +1,5 @@
 import { context, reddit } from '@devvit/web/server';
-import { isPostDeletedEarly, addToEndOfQueue, DBVersion, Timer } from './helpers';
+import { isPostDeletedEarly, DBVersion, TaskScheduler } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
@@ -121,10 +121,9 @@ async function updateUserFlair(username: string, streak: number) {
 export async function handleStreak(): Promise<{ status: string; message: string; number: number }> {
 	// Only removes from the beginning of the queue
   const dbVersion = await DBVersion();
-  let timer = new Timer();
+  let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
 	
-  while (await redis.zCard(`streak-queue-v${dbVersion}`) > 0) {
-    timer.startNextTask();
+  while (await redis.zCard(`streak-queue-v${dbVersion}`) > 0 && await taskScheduler.startNextTask()) {
     const postInfo = (await redis.zRange(`streak-queue-v${dbVersion}`, 0, 0))[0];
     if (postInfo == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
     const postId = postInfo['member'];
@@ -147,19 +146,19 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 			const currentQueueScore = await redis.zScore(`streak-queue-v${dbVersion}`, postId);
 			if (currentQueueScore == postInfo['score']) { await redis.zRem(`streak-queue-v${dbVersion}`, [postId]); } // Only remove the post from the queue if it has not been added again with a new score. That's because it gets added to the queue again if a post before it was deleted, which might have influence on the streak
 		}
-
-		if (timer.endTask()) { break; }
 	}
 	return { status: 'success', message: `Streaks calculated`, number: 200 };
 }
 
 export async function handleBackgroundStreak() {
+  let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+  if (await taskScheduler.endTask()) { return false; }
   const dbVersion = await DBVersion();
 	let currentUserScore = parseInt(await redis.get(`background-task-tracker-v${dbVersion}`) ?? '0');
-	while (true) {
+	while (true && await taskScheduler.startNextTask()) {
 		const currentUser = (await redis.zRange(`users-v${dbVersion}`, currentUserScore, '+inf', { by: 'score' }))[0];
 		if (currentUser == undefined) {
-			return;
+			return true;
 		}
 
 		const streaks = await calculateStreak(currentUser.member);
@@ -171,4 +170,5 @@ export async function handleBackgroundStreak() {
 		currentUserScore = currentUser.score + 1;
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentUserScore.toString());
 	}
+  return false;
 }

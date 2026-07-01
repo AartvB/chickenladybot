@@ -9,6 +9,8 @@ triggers.post('/on-app-install', async (c) => {
   const input = await c.req.json<OnAppInstallRequest>();
   console.log('App installed to subreddit: r/' + input.subreddit?.name);
 
+  // FIXME: Initialise relevant database keys for the subreddit, such as current count, current count link, current count post id, etc.
+
   return c.json<TriggerResponse>({status: 'success',},200);
 });
 

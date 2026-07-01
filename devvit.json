@@ -8,22 +8,19 @@
   "menu": {
     "items": [
       {
-        "label": "Mop comments",
-        "description": "Remove this comment and all child comments. This might take a few seconds to run.",
-        "location": "comment",
+        "label": "Toggle shutdown",
+        "description": "Activate or deactivate shutdown mode. In shutdown mode, the bot will stop processing any new posts.",
+        "location": "subreddit",
         "forUserType": "moderator",
-        "endpoint": "/internal/menu/mop-comment"
-      },
-      {
-        "label": "Mop post comments",
-        "description": "Remove all comments of this post. This might take a few seconds to run.",
-        "location": "post",
-        "forUserType": "moderator",
-        "endpoint": "/internal/menu/mop-post"
+        "endpoint": "/internal/menu/toggle-shutdown"
       }
     ]
   },
-  "forms": {},
+  "forms": {
+    "deactivateHardShutdown": "/internal/form/deactivate-hard-shutdown",
+    "handleSoftShutdown": "/internal/form/handle-soft-shutdown",
+    "activateShutdown": "/internal/form/activate-shutdown"
+  },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",
     "onAppUpgrade": "/internal/triggers/on-app-upgrade",
