@@ -68,3 +68,26 @@ menu.post('/toggle-shutdown', async (c) => {
     }, 200);
   }
 });
+
+menu.post('/add-post-to-streak-database', async (c) => {
+  const values = await c.req.json<{targetId?: string}>();
+  const postId = values.targetId?.slice(3) ?? '';
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'addPostToStreakDatabase',
+      form: {
+        fields: [{
+          name: 'postId',
+          label: 'Post ID',
+          type: 'string',
+          defaultValue: postId,
+          helpText: 'This is the ID of the post you want to add to the streak database (the relevant ID is filled in automatically).'
+        }],
+        title: 'Add this post to the streak database',
+        description: 'This form allows you to add a post to the streak database. This is useful if a user has posted a number but the bot did not process it for some reason. You can add the post to the database so that it counts towards their streak.',
+        acceptLabel: 'Add post to streak database',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});

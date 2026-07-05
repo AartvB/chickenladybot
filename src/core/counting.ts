@@ -3,7 +3,7 @@ import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
 
-async function addPostToDatabase(postId: T3, postNumber: number, authorName: string, timestamp: number) {
+export async function addPostToDatabase(postId: T3, postNumber: number, authorName: string, timestamp: number) {
   const dbVersion = await DBVersion();
   const dateUTC = new Date(timestamp).toISOString().slice(0, 10);
   await redis.set(`current-count-v${dbVersion}`, postNumber.toString());

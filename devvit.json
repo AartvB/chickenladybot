@@ -13,13 +13,21 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/toggle-shutdown"
+      },
+      {
+        "label": "Add post to streak database",
+        "description": "Add a post to the streak database. This is useful if a post was somehow missed by the bot and you want to add it manually.",
+        "location": "post",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/add-post-to-streak-database"
       }
     ]
   },
   "forms": {
     "deactivateHardShutdown": "/internal/form/deactivate-hard-shutdown",
     "handleSoftShutdown": "/internal/form/handle-soft-shutdown",
-    "activateShutdown": "/internal/form/activate-shutdown"
+    "activateShutdown": "/internal/form/activate-shutdown",
+    "addPostToStreakDatabase": "/internal/form/add-post-to-streak-database"
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",

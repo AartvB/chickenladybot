@@ -1,11 +1,10 @@
 import { Hono } from 'hono';
-import type { UiResponse } from '@devvit/web/shared';
-import { redis } from '@devvit/web/server';
+import type { T3, UiResponse } from '@devvit/web/shared';
+import { reddit, redis } from '@devvit/web/server';
 import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown } from '../core/helpers';
+import { addPostToDatabase } from '../core/counting';
 
 export const forms = new Hono();
-
-// FIXME: Actually implement the shutdown functionality. Also implement it in Timer, which should be renamed to 
 
 forms.post('/deactivate-hard-shutdown', async (c) => {
   if (await isInHardShutdown()) {
@@ -60,4 +59,28 @@ forms.post('/activate-shutdown', async (c) => {
     await updateTargetPost();
     return c.json<UiResponse>({ showToast: uiResponse }, 200);
   }
+});
+
+forms.post('/add-post-to-streak-database', async (c) => {
+  const dbVersion = await DBVersion();
+  const values = await c.req.json<{postId?: string}>();
+  if (values.postId == undefined) { return c.json<UiResponse>({ showToast: 'No post ID provided. Please try again.',}, 200); }
+  const targetPostId = "t3_" + values.postId;
+  let targetPost;
+  try { targetPost = await reddit.getPostById(targetPostId as T3); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
+  const alreadyInDatabase = await redis.zScore(`posts-v${dbVersion}`, targetPostId as T3) != undefined;
+  if (alreadyInDatabase) { return c.json<UiResponse>({ showToast: 'The provided post ID is already in the streak database. Please try again.',}, 200); }  
+  const postNumber = parseInt(targetPost.title);
+  if (isNaN(postNumber)) { return c.json<UiResponse>({ showToast: 'The provided post ID does not correspond to a valid counting post. Please try again.',}, 200); }
+  const authorName = targetPost.authorName;
+  const timestamp = targetPost.createdAt.getTime();
+
+  await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [targetPostId as T3]);
+  await redis.zRem(`late-deleted-post-queue-v${dbVersion}`, [targetPostId as T3]);
+  await redis.zRem(`early-deleted-posts-v${dbVersion}`, [targetPostId as T3]);
+
+  await addPostToDatabase(targetPostId as T3, postNumber, authorName, timestamp);
+
+  return c.json<UiResponse>({ showToast: `Added post ${targetPostId} to the streak database.` }, 200);
 });

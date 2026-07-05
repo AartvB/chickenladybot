@@ -101,7 +101,4 @@ MOD functions
 - def fill_database_after_failure(self):
 - def add_COAD_streak(self):
 - def check_player_streak(self):
-- def add_post(self, post_id):
 - def delete_post(self):
-- def start_maintenance(self):
-- def end_maintenance(self):

@@ -75,7 +75,7 @@ export class TaskScheduler {
     this.stopAtHardShutdown = stopAtHardShutdown;
   }
   async startNextTask() { 
-    const result = await this.endTask();
+    const result = !(await this.endTask());
     this.startTimeTask = Date.now();
     return result;
   }
