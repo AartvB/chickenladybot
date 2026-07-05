@@ -15,7 +15,7 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 	if (timestamp != undefined) {
 		if (early_removal) {
 			await addToEndOfQueue(`streak-queue-v${dbVersion}`, postId);
-			const postsAfter = await redis.zRange(`posts-v${dbVersion}`, timestamp, '+inf', {by: 'score'});
+			const postsAfter = await redis.zRange(`posts-of-${authorName}-v${dbVersion}`, timestamp, '+inf', {by: 'score'});
 			for (const postInfo of postsAfter) { await addToEndOfQueue(`streak-queue-v${dbVersion}`, postInfo['member']); }
 		}
 		else {

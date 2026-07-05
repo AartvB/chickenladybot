@@ -114,3 +114,32 @@ menu.post('/remove-post-from-streak-database', async (c) => {
     },
   }, 200);
 });
+
+menu.post('/add-manual-streak', async (c) => {
+  const values = await c.req.json<{targetId?: string}>();
+  const postId = values.targetId?.slice(3) ?? '';
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'addManualStreak',
+      form: {
+        fields: [{
+          name: 'postId',
+          label: 'Post ID',
+          type: 'string',
+          defaultValue: postId,
+          helpText: 'This is the ID of the post for which you want to add the streak to the database (this can be a post in the current subreddit or one in r/CountOnceADay).'
+        },
+        {
+          name: 'streak',
+          label: 'Streak Length',
+          type: 'number',
+          helpText: 'Enter the length of the streak you want to add.'
+        }],
+        title: 'Add a manual streak',
+        description: 'This form allows you to add a manual streak for a user. This is mainly useful for if a user moves from r/CountOnceADay to the current subreddit and you want to add their streak to the database. In that case put the post ID of their last post in r/CountOnceADay and the length of their streak.',
+        acceptLabel: 'Add manual streak',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});

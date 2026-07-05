@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { T3, UiResponse } from '@devvit/web/shared';
-import { reddit, redis } from '@devvit/web/server';
-import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown } from '../core/helpers';
+import { context, reddit, redis } from '@devvit/web/server';
+import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown, addToEndOfQueue } from '../core/helpers';
 import { addPostToDatabase } from '../core/counting';
 import { removePostFromDatabase } from '../core/deletion';
 
@@ -98,4 +98,35 @@ forms.post('/remove-post-from-streak-database', async (c) => {
   if (!alreadyInDatabase) { return c.json<UiResponse>({ showToast: 'The provided post ID is not in the streak database. Please try again.',}, 200); }
   await removePostFromDatabase(targetPostId as T3, true);
   return c.json<UiResponse>({ showToast: `Removed post ${targetPostId} from the streak database.` }, 200);
+});
+
+forms.post('/add-manual-streak', async (c) => {
+  const dbVersion = await DBVersion();
+  const values = await c.req.json<{postId?: string, streak?: number}>();
+  if (values.postId == undefined || values.streak == undefined) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
+  const postId = "t3_" + values.postId;
+  let targetPost;
+  try { targetPost = await reddit.getPostById(postId as T3); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
+  const streak = values.streak;
+  if (streak < 0 || !Number.isInteger(streak)) { return c.json<UiResponse>({ showToast: 'Streak length must be a non-negative integer. Please try again.',}, 200); }
+  const subreddit = targetPost.subredditName;
+  const streakType = subreddit === context.subredditName ? 'local' : 'COAD';
+  const authorName = targetPost.authorName;
+  const timestamp = targetPost.createdAt.getTime();
+
+  while (true) {
+    const txn = await redis.watch(`other-streaks-of${authorName}-v${dbVersion}`);
+    await txn.multi();
+    const existingStreaks = await redis.get(`other-streaks-of${authorName}-v${dbVersion}`);
+    let streakValues = existingStreaks ? JSON.parse(existingStreaks) : [];
+    streakValues.push({ streak: streak, source: streakType, timestamp: timestamp });
+    await txn.set(`other-streaks-of${authorName}-v${dbVersion}`, JSON.stringify(streakValues));
+    if (await txn.exec()) { break; } // If the transaction was successful, break the loop. Otherwise, retry.
+  }
+
+  const postsAfter = await redis.zRange(`posts-of-${authorName}-v${dbVersion}`, timestamp, '+inf', {by: 'score'});
+  for (const postInfo of postsAfter) { await addToEndOfQueue(`streak-queue-v${dbVersion}`, postInfo['member']); }
+
+  return c.json<UiResponse>({ showToast: `Added a manual ${streakType} streak of length ${streak} for post ${postId}.` }, 200);
 });
