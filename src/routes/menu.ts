@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import type { UiResponse } from '@devvit/web/shared';
-import { isInHardShutdown, isInSoftShutdown } from '../core/helpers';
+import type { T3, UiResponse } from '@devvit/web/shared';
+import { DBVersion, isInHardShutdown, isInSoftShutdown } from '../core/helpers';
+import { reddit, redis } from '@devvit/web/server';
 
 export const menu = new Hono();
 
@@ -138,6 +139,40 @@ menu.post('/add-manual-streak', async (c) => {
         title: 'Add a manual streak',
         description: 'This form allows you to add a manual streak for a user. This is mainly useful for if a user moves from r/CountOnceADay to the current subreddit and you want to add their streak to the database. In that case put the post ID of their last post in r/CountOnceADay and the length of their streak.',
         acceptLabel: 'Add manual streak',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/view-streak-development', async (c) => {
+  const values = await c.req.json<{targetId?: string}>();
+  const postId = values.targetId;
+  if (postId == undefined) { return c.json<UiResponse>({ showToast: 'Post info not found',}, 200); }
+  const post = await reddit.getPostById(postId as T3);
+  const authorName = post.authorName;
+  const timezones = Intl.supportedValuesOf('timeZone')
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'viewStreakDevelopment',
+      form: {
+        fields: [{
+          name: 'authorName',
+          label: 'Author Name',
+          type: 'string',
+          defaultValue: authorName,
+          helpText: 'This is the name of the user for whom you want to view streak development.'
+        },
+        {
+          name: 'timeZone',
+          label: 'Time Zone',
+          type: 'select',
+          options: timezones.map((tz) => ({ value: tz, label: tz })),
+          defaultValue: ['Europe/Amsterdam'],
+        }],
+        title: 'View streak development',
+        description: 'View the development of the streak of a user over time.',
+        acceptLabel: 'View streak development',
         cancelLabel: 'Cancel'
       },
     },

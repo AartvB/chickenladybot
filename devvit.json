@@ -34,6 +34,13 @@
         "location": "post",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/add-manual-streak"
+      },
+      {
+        "label": "View streak development",
+        "description": "View the development of streak over time.",
+        "location": "post",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/view-streak-development"
       }
     ]
   },
@@ -43,7 +50,9 @@
     "activateShutdown": "/internal/form/activate-shutdown",
     "addPostToStreakDatabase": "/internal/form/add-post-to-streak-database",
     "removePostFromStreakDatabase": "/internal/form/remove-post-from-streak-database",
-    "addManualStreak": "/internal/form/add-manual-streak"
+    "addManualStreak": "/internal/form/add-manual-streak",
+    "viewStreakDevelopment": "/internal/form/view-streak-development",
+    "displayStreakDevelopment": "/internal/form/display-streak-development"
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",

@@ -130,3 +130,38 @@ forms.post('/add-manual-streak', async (c) => {
 
   return c.json<UiResponse>({ showToast: `Added a manual ${streakType} streak of length ${streak} for post ${postId}.` }, 200);
 });
+
+forms.post('/view-streak-development', async (c) => {  
+  const dbVersion = await DBVersion();
+  const values = await c.req.json<{authorName: string, timeZone: string}>();
+  const authorName = values.authorName;
+  const recentPosts = await redis.zRange(`posts-of-${authorName}-v${dbVersion}`, -5, -1, );
+  let streakInfo = `Recent streaks for user ${authorName}:\n\n`;
+  for (const postInfo of recentPosts) {
+    const postId = postInfo['member'];
+    const streakLength = await redis.zScore(`post-streaks-v${dbVersion}`, postId);
+    const timestamp = await redis.zScore(`posts-of-${authorName}-v${dbVersion}`, postId);
+    const dateStr = timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: values.timeZone }) : 'Unknown date';
+    const postTitle = (await reddit.getPostById(postId as T3)).title;
+    if (streakLength != undefined) { streakInfo += `${dateStr}, post: https://www.reddit.com/r/${context.subredditName}/comments/${postId}: ${streakLength}.\n\n`; }
+    else { streakInfo += `${dateStr}, post: https://www.reddit.com/r/${context.subredditName}/comments/${postId}: Unknown.\n\\n`; }
+  }
+  // TODO: Add COAD streaks to this output
+  // TODO: Add local streaks to this output
+  // TODO: Add deleted posts to this output, both within and after 10 minutes
+  // TODO: Work on formatting of this output to make it more readable
+
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'displayStreakDevelopment',
+      form: {
+        fields: [],
+        title: 'Streak Development',
+        description: streakInfo,
+        acceptLabel: 'Close',
+      }
+    },
+  }, 200);
+});
+
+forms.post('/display-streak-development', async (c) => { return c.json<UiResponse>({ showToast: "Streak information displayed." }, 200); });
