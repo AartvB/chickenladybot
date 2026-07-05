@@ -91,3 +91,26 @@ menu.post('/add-post-to-streak-database', async (c) => {
     },
   }, 200);
 });
+
+menu.post('/remove-post-from-streak-database', async (c) => {
+  const values = await c.req.json<{targetId?: string}>();
+  const postId = values.targetId?.slice(3) ?? '';
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'removePostFromStreakDatabase',
+      form: {
+        fields: [{
+          name: 'postId',
+          label: 'Post ID',
+          type: 'string',
+          defaultValue: postId,
+          helpText: 'This is the ID of the post you want to remove from the streak database (the relevant ID is filled in automatically).'
+        }],
+        title: 'Remove this post from the streak database',
+        description: 'This form allows you to remove a post from the streak database. This is useful if a post was added to the database by mistake and you want to remove it.',
+        acceptLabel: 'Remove post from streak database',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});

@@ -3,6 +3,7 @@ import type { T3, UiResponse } from '@devvit/web/shared';
 import { reddit, redis } from '@devvit/web/server';
 import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown } from '../core/helpers';
 import { addPostToDatabase } from '../core/counting';
+import { removePostFromDatabase } from '../core/deletion';
 
 export const forms = new Hono();
 
@@ -83,4 +84,18 @@ forms.post('/add-post-to-streak-database', async (c) => {
   await addPostToDatabase(targetPostId as T3, postNumber, authorName, timestamp);
 
   return c.json<UiResponse>({ showToast: `Added post ${targetPostId} to the streak database.` }, 200);
+});
+
+forms.post('/remove-post-from-streak-database', async (c) => {
+  const dbVersion = await DBVersion();
+  const values = await c.req.json<{postId?: string}>();
+  if (values.postId == undefined) { return c.json<UiResponse>({ showToast: 'No post ID provided. Please try again.',}, 200); }
+  const targetPostId = "t3_" + values.postId;
+  let targetPost;
+  try { targetPost = await reddit.getPostById(targetPostId as T3); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
+  const alreadyInDatabase = await redis.zScore(`posts-v${dbVersion}`, targetPostId as T3) != undefined;
+  if (!alreadyInDatabase) { return c.json<UiResponse>({ showToast: 'The provided post ID is not in the streak database. Please try again.',}, 200); }
+  await removePostFromDatabase(targetPostId as T3, true);
+  return c.json<UiResponse>({ showToast: `Removed post ${targetPostId} from the streak database.` }, 200);
 });

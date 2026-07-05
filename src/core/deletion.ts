@@ -3,7 +3,7 @@ import { T3 } from '@devvit/shared-types/tid.js';
 import { reddit } from '@devvit/web/server';
 import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly } from './helpers';
 
-async function removePostFromDatabase(postId: T3, early_removal: boolean) {
+export async function removePostFromDatabase(postId: T3, early_removal: boolean) {
 	const dbVersion = await DBVersion();
 
 	const alreadyDeletedEarly = await redis.zScore(`early-deleted-posts-v${dbVersion}`, postId) != undefined;
@@ -70,7 +70,7 @@ async function removePostFromDatabase(postId: T3, early_removal: boolean) {
 		await redis.zAdd(`early-deleted-posts-v${dbVersion}`, { member: postId, score: Date.now() });
 		await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId]);
 
-		let message = `This post has been removed by you or a moderator within 10 minutes of posting. Therefore this post does not count as your post for this day and does not contribute to your streak, feel free to post again.` // TODO: Remove magic number 10
+		let message = `This post has been removed by you or a moderator within 10 minutes of posting, or it has been flagged for special deletion because you contacted us through mod mail. Therefore this post does not count as your post for this day and does not contribute to your streak. Feel free to post again.` // TODO: Remove magic number 10
 		message += await botExplainer();
 		await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
 
