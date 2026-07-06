@@ -1,9 +1,10 @@
-import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler } from './helpers';
+import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime } from './helpers';
 import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
 
 export async function addPostToDatabase(postId: T3, postNumber: number, authorName: string, timestamp: number) {
+  console.log(`${getDateTime()}: Adding post ${postId} with title ${postNumber} by user ${authorName} to the database`);
   const dbVersion = await DBVersion();
   const dateUTC = new Date(timestamp).toISOString().slice(0, 10);
   await redis.set(`current-count-v${dbVersion}`, postNumber.toString());
@@ -41,6 +42,7 @@ export async function addPostToDatabase(postId: T3, postNumber: number, authorNa
 }
 
 async function removePost(postId: T3, commentText: string) {
+  console.log(`${getDateTime()}: Removing post ${postId} with comment: ${commentText}`);
   await reddit.remove(postId, false);
   const postInfo = await reddit.getPostById(postId);
   let message = commentText;
@@ -66,6 +68,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
     if (await isPostDeleted(post)) { await redis.zRem(`new-post-queue-v${dbVersion}`, [postId]); continue; }
 
     const postTitle = post.title;
+    console.log(`${getDateTime()}: Processing new post ${postId} with title '${postTitle}' by user ${post.authorName}`);
     if (/^\d+$/.test(postTitle)) {
       const postNumber = parseInt(postTitle);
       const currentCountString = await redis.get(`current-count-v${dbVersion}`);
@@ -141,11 +144,10 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
 }
 
 export async function detectNewPosts(): Promise<{ message: string; status: string; number: number }> {
-  // FIXME: set variable below to 5 or 10
   let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
   if (await taskScheduler.endTask()) { return { status: 'error', message: 'Background task stopped due to time limit or shutdown', number: 503 }; }
   const dbVersion = await DBVersion();
-  const nSubsequentChecks = 0; // Number of extra subsequent existing posts to check when finding an existing post
+  const nSubsequentChecks = 5; // Number of extra subsequent existing posts to check when finding an existing post
   let limitStr = await redis.get(`new-post-limit-v${dbVersion}`);
   if (limitStr == undefined) {
     limitStr = '10';
@@ -176,14 +178,14 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
         else { break; }
       }
     }
-    if (nExtraPostsToDo > 0) { // Try again with more posts if we haven't found enough existing posts to be confident we've found all new posts
+    if (nExtraPostsToDo > 0 && limit < 1000) { // Try again with more posts if we haven't found enough existing posts to be confident we've found all new posts, but stop when the limit is 1000 since that is the maximum number of posts we can get from the API
       limit *= 2;
       await redis.set(`new-post-limit-v${dbVersion}`, limit.toString());
     }
-
     else {
       await redis.set(`new-post-limit-v${dbVersion}`, '10'); // Reset limit to 10 for next check, since we successfully found all new posts with the current limit
       for (const [index, postId] of newPostIds.entries()) {
+        console.log(`${getDateTime()}: New post detected: ${postId}`);
         await redis.zAdd(`new-post-queue-v${dbVersion}`, { member: postId, score: index });
       }
       return { status: 'ok', message: `Added ${newPostIds.length} new posts to the queue`, number: 200 };

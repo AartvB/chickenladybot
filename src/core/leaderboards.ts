@@ -1,7 +1,7 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 import { context, reddit } from '@devvit/web/server';
-import { DBVersion, TaskScheduler } from './helpers';
+import { DBVersion, getDateTime, TaskScheduler } from './helpers';
 
 // FIXME: All leaderboards: check if they are in the correct order!
 
@@ -244,7 +244,6 @@ async function updateStreakLeaderboard() {
 	let previousStreak = 0;
 	let previousRank = 0;
 	let rowNumber = 1;
-	console.log(`Current streaks: ${currentStreaks.length}, top streaks: ${topStreaks.length}, current COAD streaks: ${currentCOADStreaks.length}, top COAD streaks: ${topCOADStreaks.length}`);
 	for (const streak of currentStreaks) {
 		previousRank = streak.score == previousStreak ? previousRank : rowNumber;
 		previousStreak = streak.score;
@@ -297,6 +296,7 @@ export async function handleLeaderboards() {
 	const dbVersion = await DBVersion();
 	let currentTask = await redis.get(`background-task-tracker-v${dbVersion}`) ?? 'posts-0';
 	if (/^posts-(\d+)$/.test(currentTask)) {
+		console.log(`${getDateTime()}: Starting leaderboard background update (checking upvotes and comment count) from post score ${currentTask.split('-')[1] ?? '0'}`);
 		let currentPostScore = parseInt(currentTask.split('-')[1] ?? '0');
 		const now = Date.now();
 		if (currentPostScore == 0) {
@@ -324,9 +324,10 @@ export async function handleLeaderboards() {
 		}
 	}
 	if (/^users-(\d+)$/.test(currentTask)) {
-		if (!await taskScheduler.startNextTask()) { return false; }
+		console.log(`${getDateTime()}: Starting leaderboard background update (streaks) from user score ${currentTask.split('-')[1] ?? '0'}`);
 		let currentUserScore = parseInt(currentTask.split('-')[1] ?? '0');
 		while (true) {
+			if (!await taskScheduler.startNextTask()) { return false; }
 			const currentUser = (await redis.zRange(`users-v${dbVersion}`, currentUserScore, '+inf', { by: 'score' }))[0];
 			if (currentUser == undefined) { 
 				currentTask = 'count';
@@ -347,46 +348,54 @@ export async function handleLeaderboards() {
 
 			currentUserScore = currentUser.score + 1;
 			await redis.set(`background-task-tracker-v${dbVersion}`, `users-${currentUserScore}`);
+			if (!await taskScheduler.startNextTask()) { return false; }
 		}
 	}
 	if (currentTask == 'count') {
 		if (!await taskScheduler.startNextTask()) { return false; }
+		console.log(`${getDateTime()}: Starting leaderboard background update (count leaderboard)`);
 		await updateCountLeaderboard();
 		currentTask = 'wholeCounts';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'wholeCounts') {
 		if (!await taskScheduler.startNextTask()) { return false; }
+		console.log(`${getDateTime()}: Starting leaderboard background update (whole counts leaderboards)`);
 		await updateWholeCountsLeaderboards();
 		currentTask = 'mostComments';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'mostComments') {
 		if (!await taskScheduler.startNextTask()) { return false; }
+		console.log(`${getDateTime()}: Starting leaderboard background update (most comments leaderboard)`);
 		await updateMostCommentsLeaderboard();
 		currentTask = 'mostUpvotes';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'mostUpvotes') {
 		if (!await taskScheduler.startNextTask()) { return false; }
+		console.log(`${getDateTime()}: Starting leaderboard background update (most upvotes leaderboard)`);
 		await updateMostUpvotesLeaderboard();
 		currentTask = 'identicalDigits';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'identicalDigits') {
 		if (!await taskScheduler.startNextTask()) { return false; }
+		console.log(`${getDateTime()}: Starting leaderboard background update (identical digits leaderboard)`);
 		await updateIdenticalDigitsLeaderboard();
 		currentTask = 'palindrome';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'palindrome') {
 		if (!await taskScheduler.startNextTask()) { return false; }
+		console.log(`${getDateTime()}: Starting leaderboard background update (palindrome leaderboard)`);
 		await updatePalindromeLeaderboard();
 		currentTask = 'streak';
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
 	}
 	if (currentTask == 'streak') {
 		if (!await taskScheduler.startNextTask()) { return false; }
+		console.log(`${getDateTime()}: Starting leaderboard background update (streak leaderboard)`);
 		await updateStreakLeaderboard();
 	}
 	return true;

@@ -47,6 +47,10 @@ export async function updateTargetPost() {
   return { status: 'ok', message: `Successfully processed new posts`, number: 200 }
 }
 
+export function getDateTime() {
+  return new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
+}
+
 export type TaskSchedulerOptions = {
   timeToStop?: number;
   maxTime?: number;

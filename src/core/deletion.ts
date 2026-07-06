@@ -1,7 +1,7 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 import { reddit } from '@devvit/web/server';
-import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly } from './helpers';
+import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly, getDateTime } from './helpers';
 
 export async function removePostFromDatabase(postId: T3, early_removal: boolean) {
 	const dbVersion = await DBVersion();
@@ -104,6 +104,7 @@ export async function handleDeletedPosts() {
 		const postId = postInfo['member'];
 		const post = await reddit.getPostById(postId as T3);
 		if (await isPostDeleted(post) && !(await isPostDeletedEarly(postId as T3))) { 
+			console.log(`${getDateTime()}: Post ${postId} has been deleted within 10 minutes of posting, adding to early-deleted-post-queue`);
 			await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId);
 		}
 	}
@@ -114,6 +115,7 @@ export async function handleDeletedPosts() {
     if (postInfo == undefined) { return false; }
 		const postId = postInfo['member'];
 
+		console.log(`${getDateTime()}: Processing early deleted post ${postId}`);
 		await removePostFromDatabase(postId as T3, true);
 
 		await redis.zAdd(`early-deleted-posts-v${dbVersion}`, { member: postId, score: Date.now() });
@@ -127,6 +129,7 @@ export async function handleDeletedPosts() {
 	return true
 }
 async function removeUserInfo(username: string) {
+	console.log(`${getDateTime()}: Removing user ${username} from the database`);
 	const dbVersion = await DBVersion();
 	await redis.zRem(`users-v${dbVersion}`, [username]);
 	await redis.zRem(`current-streaks-v${dbVersion}`, [username]);
@@ -156,6 +159,7 @@ export async function handleCleanup(): Promise<boolean> {
 	const dbVersion = await DBVersion();
 	let currentTask = await redis.get(`background-task-tracker-v${dbVersion}`) ?? 'late-posts-0';
 	if (/^late-posts-(\d+)$/.test(currentTask)) {
+		console.log(`${getDateTime()}: Starting cleanup of late deleted posts from the database, starting from score ${currentTask.split('late-posts-')[1]}`);
 		const currentPostScore = parseInt(currentTask.split('late-posts-')[1] ?? '0');
 		const now = Date.now();
 		const endPostScore = now - 21 * 24 * 60 * 60 * 1000; // End 21 days ago
@@ -172,10 +176,12 @@ export async function handleCleanup(): Promise<boolean> {
 			const postId = postToDelete['member'];
 
 			if (!isPostDeleted(await reddit.getPostById(postId as T3))) {
+				console.log(`${getDateTime()}: Post ${postId} is no longer deleted, removing from late-deleted-posts queue`);
 				await redis.zRem(`late-deleted-posts-v${dbVersion}`, [postId]);
 				continue;
 			}
 
+			console.log(`${getDateTime()}: Cleaning up late deleted post ${postId} from the database`);
 			const postData = await redis.get(`post-info-${postId}-v${dbVersion}`);
 			if (postData == undefined) { await redis.zRem(`late-deleted-posts-v${dbVersion}`, [postId]); continue; }
 			const authorName = JSON.parse(postData).authorName;
@@ -191,6 +197,7 @@ export async function handleCleanup(): Promise<boolean> {
 		}
 	}
 	if (/^early-posts-(\d+)$/.test(currentTask)) {
+		console.log(`${getDateTime()}: Starting cleanup of early deleted posts from the database, starting from score ${currentTask.split('early-posts-')[1]}`);
 		const currentPostScore = parseInt(currentTask.split('early-posts-')[1] ?? '0');
 		const now = Date.now();
 		const endPostScore = now - 21 * 24 * 60 * 60 * 1000; // End 21 days ago

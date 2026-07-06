@@ -1,5 +1,5 @@
 import { context, reddit } from '@devvit/web/server';
-import { isPostDeletedEarly, DBVersion, TaskScheduler } from './helpers';
+import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
@@ -132,6 +132,8 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 
 		const username = post.authorName;
 		const timestamp = post.createdAt.getTime();
+
+    console.log(`${getDateTime()}: Calculating streak for user ${username} based on post ${postId} (timestamp: ${timestamp})`);
     const streak = await calculateStreak(username, timestamp); // FIXME: Test COAD streaks
 
 		await redis.zAdd(`current-streaks-v${dbVersion}`, { member: username, score: streak.streak });
@@ -155,6 +157,7 @@ export async function handleBackgroundStreak() {
   if (await taskScheduler.endTask()) { return false; }
   const dbVersion = await DBVersion();
 	let currentUserScore = parseInt(await redis.get(`background-task-tracker-v${dbVersion}`) ?? '0');
+  console.log(`${getDateTime()}: Starting streak background update from user score ${currentUserScore}`);
 	while (true && await taskScheduler.startNextTask()) {
 		const currentUser = (await redis.zRange(`users-v${dbVersion}`, currentUserScore, '+inf', { by: 'score' }))[0];
 		if (currentUser == undefined) {

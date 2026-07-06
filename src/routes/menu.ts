@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { T3, UiResponse } from '@devvit/web/shared';
-import { DBVersion, isInHardShutdown, isInSoftShutdown } from '../core/helpers';
-import { reddit, redis } from '@devvit/web/server';
+import { isInHardShutdown, isInSoftShutdown } from '../core/helpers';
+import { reddit } from '@devvit/web/server';
 
 export const menu = new Hono();
 
