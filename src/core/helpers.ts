@@ -38,10 +38,8 @@ export async function updateTargetPost() {
 
   const currentCountString = await redis.get(`current-count-v${dbVersion}`);
   const currentCount = parseInt(currentCountString || '0');
-  const subredditName = await redis.get(`subredditname-v${dbVersion}`);
-  if (subredditName == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
 
-  const text = `The next number should be: [${currentCount + 1}](https://www.reddit.com/r/${subredditName}/submit?title=${currentCount + 1})` + await botExplainer();
+  const text = `The next number should be: [${currentCount + 1}](https://www.reddit.com/r/${targetPost.subredditName}/submit?title=${currentCount + 1})` + await botExplainer();
   await targetPost.edit({ text: text });
 
   return { status: 'ok', message: `Successfully processed new posts`, number: 200 }

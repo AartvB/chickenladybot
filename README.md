@@ -27,9 +27,6 @@ The bot does the following things:
 - There are additional functionalities of this bot, which are for now handled by the code on [this](https://github.com/AartvB/ChickenDiscord) github repository.
 
 ## TODO
-- Test COAD streak.
-- Setup the install and update bot code.
-- Write code to get the data from the SQL database.
 - Write code to allow a database update
 - Work through all 'TODO's in the code (none of them are critical at this point, they are all there for additional features)
 

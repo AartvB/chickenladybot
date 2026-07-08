@@ -1,15 +1,108 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
 import { reddit, redis } from '@devvit/web/server';
-import { addToEndOfQueue, botExplainer, DBVersion, isPostDeletedEarly } from '../core/helpers';
+import { addToEndOfQueue, botExplainer, DBVersion, getDateTime, isPostDeletedEarly } from '../core/helpers';
+import originalDatabase from '../core/original_database.json';
   
 export const triggers = new Hono();
+
+async function restoreDatabaseBackup() {
+  const dbVersion = await DBVersion();
+  await redis.set('new-post-handler-lock-v' + dbVersion, 'open');
+  await redis.set('streak-handler-lock-v' + dbVersion, 'open');
+  await redis.set('deleted-post-handler-lock-v' + dbVersion, 'open');
+  await redis.set('shutdown-lock-v' + dbVersion, 'hard');
+  await redis.set('current-background-task-v' + dbVersion, 'flair');
+  await redis.set('background-task-tracker-v' + dbVersion, '0');
+  await redis.set('new-post-limit-v' + dbVersion, '10');
+  await redis.set('current-count-link-v' + dbVersion, 'https://www.reddit.com/r/countwithchickenlady/comments/1iulihu/use_this_to_see_what_the_next_number_is/');
+  await redis.set('current-count-post-id-v' + dbVersion, '1iulihu');
+
+  console.log(`${getDateTime()}: Restoring users from backup.`);
+  await redis.zAdd(`users-v${dbVersion}`, ...originalDatabase.users.map((user) => ({member: user.member, score: user.score, })));
+  console.log(`${getDateTime()}: Restoring posts from backup.`);
+  await redis.zAdd(`posts-v${dbVersion}`, ...originalDatabase.posts.map((post) => ({member: post.member, score: post.score, })));
+  console.log(`${getDateTime()}: Restoring early-deleted posts from backup.`);
+  await redis.zAdd(`early-deleted-posts-v${dbVersion}`, ...originalDatabase.early_deleted_posts.map((post) => ({ member: post.member, score: post.score })));
+// TODO: Add late-deleted post queue if it is needed!
+//  console.log(`${getDateTime()}: Restoring late-deleted post queue from backup.`);
+//  await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, ...originalDatabase.late_deleted_post_queue.map((post) => ({ member: post.member, score: post.score })));
+  console.log(`${getDateTime()}: Restoring current streaks from backup.`);
+  await redis.zAdd(`current-streaks-v${dbVersion}`, ...originalDatabase.current_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+  console.log(`${getDateTime()}: Restoring current COAD streaks from backup.`);
+  await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, ...originalDatabase.current_COAD_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+  console.log(`${getDateTime()}: Restoring post streaks from backup.`);
+  await redis.zAdd(`post-streaks-v${dbVersion}`, ...originalDatabase.post_streaks.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+  console.log(`${getDateTime()}: Restoring post COAD streaks from backup.`);
+  await redis.zAdd(`post-COAD-streaks-v${dbVersion}`, ...originalDatabase.post_COAD_streaks.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+  console.log(`${getDateTime()}: Restoring top streaks from backup.`);
+  await redis.zAdd(`top-COAD-streaks-v${dbVersion}`, ...originalDatabase.top_COAD_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+  console.log(`${getDateTime()}: Restoring top COAD streaks from backup.`);
+  await redis.zAdd(`top-streaks-v${dbVersion}`, ...originalDatabase.top_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+  console.log(`${getDateTime()}: Restoring post upvotes from backup.`);
+  await redis.zAdd(`post-upvotes-v${dbVersion}`, ...originalDatabase.post_upvotes.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+  console.log(`${getDateTime()}: Restoring post comments from backup.`);
+  await redis.zAdd(`post-comments-v${dbVersion}`, ...originalDatabase.post_comments.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+  console.log(`${getDateTime()}: Restoring posts per user from backup.`);
+  await redis.zAdd(`posts-per-user-v${dbVersion}`, ...originalDatabase.posts_per_user.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+  console.log(`${getDateTime()}: Restoring identical digits posts from backup.`);
+  await redis.zAdd(`identical-digits-posts-v${dbVersion}`, ...originalDatabase.identical_digits_posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+  console.log(`${getDateTime()}: Restoring identical digits users from backup.`);
+  await redis.zAdd(`identical-digits-users-v${dbVersion}`, ...originalDatabase.identical_digits_users.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+  console.log(`${getDateTime()}: Restoring palindrome posts from backup.`);
+  await redis.zAdd(`palindrome-posts-v${dbVersion}`, ...originalDatabase.palindrome_posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+  console.log(`${getDateTime()}: Restoring palindrome users from backup.`);
+  await redis.zAdd(`palindrome-users-v${dbVersion}`, ...originalDatabase.palindrome_users.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+
+  // Single values
+  console.log(`${getDateTime()}: Restoring current count from backup.`);
+  await redis.set(`current-count-v${dbVersion}`, originalDatabase.current_count.toString());
+
+  // Group of sorted sets
+  console.log(`${getDateTime()}: Restoring posts of users from backup.`);
+  for (const [username, posts] of Object.entries(originalDatabase.posts_of)) {
+    await redis.zAdd(`posts-of-${username}-v${dbVersion}`, ...posts.map((post) => ({ member: post.member, score: post.score })));
+  }
+
+  console.log(`${getDateTime()}: Restoring whole count posts from backup.`);
+  for (const [number, posts] of Object.entries(originalDatabase.whole_count_posts)) {
+    await redis.zAdd(`whole-count-${number}-posts-v${dbVersion}`, ...posts.map((post) => ({ member: post.member, score: post.score })));
+  }
+
+  console.log(`${getDateTime()}: Restoring whole count users from backup.`);
+  for (const [number, users] of Object.entries(originalDatabase.whole_count_users)) {
+    await redis.zAdd(`whole-count-${number}-users-v${dbVersion}`, ...users.map((user) => ({ member: user.member, score: user.score })));
+  }
+
+  // Group of single values
+  console.log(`${getDateTime()}: Restoring post info from backup.`);
+  const nPosts = await redis.zCard(`posts-v${dbVersion}`);
+  let i = 0;
+  for (const [postId, postInfo] of Object.entries(originalDatabase.post_info)) {
+    if (i % 1000 == 0) { console.log(`${getDateTime()}: Restoring post info for ${i}/${nPosts} posts (${i/nPosts*100}%).`); }
+    const postInfoStr = String(postInfo);
+    await redis.set(`post-info-${postId}-v${dbVersion}`, postInfoStr);
+     i++;
+  }
+
+  console.log(`${getDateTime()}: Restoring other streaks of users from backup.`);
+  for (const [username, otherStreaks] of Object.entries(originalDatabase.other_streaks_of)) {
+    const otherStreaksStr = String(otherStreaks);
+    await redis.set(`other-streaks-of-${username}-v${dbVersion}`, otherStreaksStr);
+  }
+
+  console.log(`${getDateTime()}: Database backup restored successfully for version ${dbVersion}.`);
+}
 
 triggers.post('/on-app-install', async (c) => {
   const input = await c.req.json<OnAppInstallRequest>();
   console.log('App installed to subreddit: r/' + input.subreddit?.name);
 
-  // FIXME: Initialise relevant database keys for the subreddit, such as current count, current count link, current count post id, etc.
+  const dbVersion = '1';
+  await redis.set('database-version', dbVersion);
+  await restoreDatabaseBackup();
+
+  throw new Error('The chickenladybot is not yet ready to be installed. Please wait for the next update, or contact the developer if you want to help with development.');
 
   return c.json<TriggerResponse>({status: 'success',},200);
 });
@@ -18,25 +111,12 @@ triggers.post('/on-app-upgrade', async (c) => {
   const input = await c.req.json<OnAppUpgradeRequest>();
   console.log('App upgraded in subreddit: r/' + input.subreddit?.name);
 
-  const databaseVersion = '1';
-  await redis.set('database-version', databaseVersion);
+  const dbVersion = '1';
+  await redis.set('database-version', dbVersion);
+//  await restoreDatabaseBackup();
 
-  await redis.del(`posts-v${databaseVersion}`); // FIXME: REMOVE THIS LINE! But for testing, empty the set of all posts
-  await redis.del(`posts-of-Aartvb-v${databaseVersion}`); // FIXME: Remove this line as well, it's only for testing to reset the count of posts by the bot
-  await redis.del(`new-post-queue-v${databaseVersion}`); // Clear the queue of new posts to be processed
-  await redis.del(`streak-queue-v${databaseVersion}`); // Clear the queue of new posts to be processed
-  await redis.del(`posts-per-user-v${databaseVersion}`);
-
-  await redis.set(`streak-handler-lock-v${databaseVersion}`, 'open'); // Ensure the lock for the new post handler is open so it can run after upgrade
-  await redis.set(`new-post-handler-lock-v${databaseVersion}`, 'open'); // Ensure the lock for the new post handler is open so it can run after upgrade
-  await redis.set(`current-count-v${databaseVersion}`, '0'); // Reset the current count to 0
-  await redis.set(`current-count-link-v${databaseVersion}`, 'https://www.reddit.com/r/countwithchickenlady/comments/1iulihu'); // Reset the current count link to the correct post
-  await redis.set(`current-count-post-id-v${databaseVersion}`, '1tyqxix');
-  await redis.set(`subredditname-v${databaseVersion}`, input.subreddit?.name || ''); // Store the subreddit name in the database for later use in counting logic, to avoid relying on context.subredditName which might not always be available in the counting code
-  await redis.set(`new-post-limit-v${databaseVersion}`, '10'); // Set the limit for number of new posts to process at once, to avoid long processing times if there are a lot of new posts.
-  await redis.set(`current-background-task-v${databaseVersion}`, 'flair'); // Set the current background task to flair, to ensure the bot starts with the correct task after upgrade
-  await redis.set(`background-task-tracker-v${databaseVersion}`, '0'); // Reset the background task tracker, to ensure the bot starts with the correct task after upgrade
-  // FIXME: set current-count to the correct count based on the existing posts in the subreddit, in case the bot was offline for a while and missed some posts.
+  // FIXME: REMOVE FOR TESTING PURPOSES!
+  await redis.set('current-count-post-id-v' + dbVersion, '1tyqxix');
 
   return c.json<TriggerResponse>({status: 'success',},200);
 });

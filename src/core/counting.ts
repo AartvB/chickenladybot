@@ -1,4 +1,4 @@
-import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime } from './helpers';
+import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown } from './helpers';
 import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
@@ -56,7 +56,7 @@ async function removePost(postId: T3, commentText: string) {
 
 export async function handleNewPosts(): Promise<{ status: string; message: string; number: number }> {
   let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
-  if (await taskScheduler.endTask()) { return { status: 'error', message: 'Background task stopped due to time limit or shutdown', number: 503 }; }
+  if (await taskScheduler.endTask()) { if (!await isInSoftShutdown()) { return { status: 'error', message: 'Background task stopped due to time limit', number: 503 }; } else { return { status: 'ok', message: 'Background task stopped due to shutdown', number: 200 }; } }
   const dbVersion = await DBVersion();
   while (await redis.zCard(`new-post-queue-v${dbVersion}`) > 0 && await taskScheduler.startNextTask()) {
     const postInfo = (await redis.zRange(`new-post-queue-v${dbVersion}`, -1, -1))[0];
@@ -145,7 +145,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
 
 export async function detectNewPosts(): Promise<{ message: string; status: string; number: number }> {
   let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
-  if (await taskScheduler.endTask()) { return { status: 'error', message: 'Background task stopped due to time limit or shutdown', number: 503 }; }
+  if (await taskScheduler.endTask()) { if (!await isInSoftShutdown()) { return { status: 'error', message: 'Background task stopped due to time limit', number: 503 }; } else { return { status: 'ok', message: 'Background task stopped due to shutdown', number: 200 }; } }
   const dbVersion = await DBVersion();
   const nSubsequentChecks = 5; // Number of extra subsequent existing posts to check when finding an existing post
   let limitStr = await redis.get(`new-post-limit-v${dbVersion}`);
@@ -191,5 +191,5 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
       return { status: 'ok', message: `Added ${newPostIds.length} new posts to the queue`, number: 200 };
     }
   }
-  return { status: 'error', message: 'Background task stopped due to time limit or shutdown', number: 503 };
+  if (!await isInSoftShutdown()) { return { message: 'Background task stopped due to time limit', status: 'error', number: 503 }; } else { return { message: 'Background task stopped due to shutdown', status: 'ok', number: 200 }; }
 }

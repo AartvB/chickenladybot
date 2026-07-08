@@ -134,7 +134,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 		const timestamp = post.createdAt.getTime();
 
     console.log(`${getDateTime()}: Calculating streak for user ${username} based on post ${postId} (timestamp: ${timestamp})`);
-    const streak = await calculateStreak(username, timestamp); // FIXME: Test COAD streaks
+    const streak = await calculateStreak(username, timestamp);
 
 		await redis.zAdd(`current-streaks-v${dbVersion}`, { member: username, score: streak.streak });
 		await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, { member: username, score: streak.CoadStreak });
@@ -173,5 +173,6 @@ export async function handleBackgroundStreak() {
 		currentUserScore = currentUser.score + 1;
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentUserScore.toString());
 	}
+  console.log(`${getDateTime()}: Ended streak background update at user score ${currentUserScore}`);
   return false;
 }

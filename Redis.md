@@ -36,7 +36,6 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **current-count**: The current count of the subreddit.
 - **current-count-link**: The link of the post that shows what the current count is (TODO: REMOVE THIS IN THE FUTURE, WE ALREADY HAVE CURRENT-COUNT-POST-ID).
 - **current-count-post-id**: The id of the post that shows what the current count is.
-- **subredditname**: The name of the subreddit # TODO: REMOVE, IT'S NOT NEEDED DUE TO THE EXISTENCE OF context.subredditName.
 - **new-post-limit**: The number of posts to process at once when checking for new posts.
 
 ## Group of sorted sets
