@@ -37,7 +37,7 @@
       },
       {
         "label": "View streak development",
-        "description": "View the development of streak over time.",
+        "description": "View the development of streak over time. Works best on mobile.",
         "location": "post",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/view-streak-development"

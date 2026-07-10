@@ -174,9 +174,23 @@ menu.post('/view-streak-development', async (c) => {
           type: 'select',
           options: timezones.map((tz) => ({ value: tz, label: tz })),
           defaultValue: ['Europe/Amsterdam'],
+        },
+        {
+          name: 'numberOfPosts',
+          label: 'Number of Posts',
+          type: 'number',
+          defaultValue: 6,
+          helpText: 'How many posts you want to view.'
+        },
+        {
+          name: 'includePostLink',
+          label: 'Include Post Links',
+          type: 'boolean',
+          defaultValue: true,
+          helpText: 'If checked, the link to the posts will be included in the output.'
         }],
         title: 'View streak development',
-        description: 'View the development of the streak of a user over time.',
+        description: 'View the development of the streak of a user over time. Works best on mobile.',
         acceptLabel: 'View streak development',
         cancelLabel: 'Cancel'
       },

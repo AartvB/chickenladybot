@@ -144,17 +144,25 @@ forms.post('/add-manual-streak', async (c) => {
 forms.post('/view-streak-development', async (c) => {  
   console.log(`${getDateTime()}: Received request to view streak development.`);
   const dbVersion = await DBVersion();
-  const values = await c.req.json<{authorName: string, timeZone: string}>();
+  const values = await c.req.json<{authorName: string, timeZone: string, numberOfPosts: number, includePostLink: boolean}>();
   const authorName = values.authorName;
-  const recentPosts = await redis.zRange(`posts-of-${authorName}-v${dbVersion}`, -5, -1, );
+  const numberOfPosts = values.numberOfPosts;
+  const includePostLink = values.includePostLink;
+  const recentPosts = await redis.zRange(`posts-of-${authorName}-v${dbVersion}`, -numberOfPosts, -1, );
   let streakInfo = `Recent streaks for user ${authorName}:\n\n`;
   for (const postInfo of recentPosts) {
     const postId = postInfo['member'];
     const streakLength = await redis.zScore(`post-streaks-v${dbVersion}`, postId);
     const timestamp = await redis.zScore(`posts-of-${authorName}-v${dbVersion}`, postId);
     const dateStr = timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: values.timeZone }) : 'Unknown date';
-    if (streakLength != undefined) { streakInfo += `${dateStr}, post: https://www.reddit.com/r/${context.subredditName}/comments/${postId}: ${streakLength}.\n\n`; }
-    else { streakInfo += `${dateStr}, post: https://www.reddit.com/r/${context.subredditName}/comments/${postId}: Unknown.\n\\n`; }
+    if (includePostLink) {
+      if (streakLength != undefined) { streakInfo += `${dateStr}, post: https://www.reddit.com/r/${context.subredditName}/comments/${postId}: ${streakLength}.\n\n`; }
+      else { streakInfo += `${dateStr}, post: https://www.reddit.com/r/${context.subredditName}/comments/${postId}: Unknown.\n\\n`; }
+    }
+    else {
+      if (streakLength != undefined) { streakInfo += `${dateStr}: ${streakLength}.\n\n`; }
+      else { streakInfo += `${dateStr}: Unknown.\n\n`; }
+    }
   }
   // TODO: Add COAD streaks to this output
   // TODO: Add local streaks to this output
