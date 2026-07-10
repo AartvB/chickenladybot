@@ -6,7 +6,7 @@ import originalDatabase from '../core/original_database.json';
   
 export const triggers = new Hono();
 
-async function restoreDatabaseBackup() {
+async function restoreDatabaseBackup(removeExistingData: boolean = true) {
   const dbVersion = await DBVersion();
   await redis.set('new-post-handler-lock-v' + dbVersion, 'open');
   await redis.set('streak-handler-lock-v' + dbVersion, 'open');
@@ -15,8 +15,49 @@ async function restoreDatabaseBackup() {
   await redis.set('current-background-task-v' + dbVersion, 'flair');
   await redis.set('background-task-tracker-v' + dbVersion, '0');
   await redis.set('new-post-limit-v' + dbVersion, '10');
-  await redis.set('current-count-link-v' + dbVersion, 'https://www.reddit.com/r/countwithchickenlady/comments/1iulihu/use_this_to_see_what_the_next_number_is/');
   await redis.set('current-count-post-id-v' + dbVersion, '1iulihu');
+
+  if (removeExistingData) {
+    console.log(`${getDateTime()}: Removing existing data from database.`);
+    await redis.del(`users-v${dbVersion}`);
+    await redis.del(`posts-v${dbVersion}`);
+    await redis.del(`early-deleted-posts-v${dbVersion}`);
+    await redis.del(`current-streaks-v${dbVersion}`);
+    await redis.del(`current-COAD-streaks-v${dbVersion}`);
+    await redis.del(`post-streaks-v${dbVersion}`);
+    await redis.del(`post-COAD-streaks-v${dbVersion}`);
+    await redis.del(`top-COAD-streaks-v${dbVersion}`);
+    await redis.del(`top-streaks-v${dbVersion}`);
+    await redis.del(`post-upvotes-v${dbVersion}`);
+    await redis.del(`post-comments-v${dbVersion}`);
+    await redis.del(`posts-per-user-v${dbVersion}`);
+    await redis.del(`identical-digits-posts-v${dbVersion}`);
+    await redis.del(`identical-digits-users-v${dbVersion}`);
+    await redis.del(`palindrome-posts-v${dbVersion}`);
+    await redis.del(`palindrome-users-v${dbVersion}`);
+    await redis.del(`current-count-v${dbVersion}`);
+    for (const [username, _] of Object.entries(originalDatabase.posts_of)) {
+      await redis.del(`posts-of-${username}-v${dbVersion}`);
+    }
+    for (const [number, _] of Object.entries(originalDatabase.whole_count_posts)) {
+      await redis.del(`whole-count-${number}-posts-v${dbVersion}`);
+    }
+    for (const [number, _] of Object.entries(originalDatabase.whole_count_users)) {
+      await redis.del(`whole-count-${number}-users-v${dbVersion}`);
+    }
+    let i = 0;
+    const nPosts = Object.keys(originalDatabase.post_info).length;
+    for (const [postId, _] of Object.entries(originalDatabase.post_info)) {
+      if (i % 1000 == 0) { console.log(`${getDateTime()}: Deleting post info for ${i}/${nPosts} posts (${(i / nPosts * 100).toFixed(1)}%).`); }
+      await redis.del(`post-info-${postId}-v${dbVersion}`);
+      i++;
+    }
+    for (const [username, _] of Object.entries(originalDatabase.other_streaks_of)) {
+      await redis.del(`other-streaks-of-${username}-v${dbVersion}`);
+    }
+
+    console.log(`${getDateTime()}: Database emptied successfully for version ${dbVersion}.`);
+  }
 
   console.log(`${getDateTime()}: Restoring users from backup.`);
   await redis.zAdd(`users-v${dbVersion}`, ...originalDatabase.users.map((user) => ({member: user.member, score: user.score, })));
@@ -24,9 +65,6 @@ async function restoreDatabaseBackup() {
   await redis.zAdd(`posts-v${dbVersion}`, ...originalDatabase.posts.map((post) => ({member: post.member, score: post.score, })));
   console.log(`${getDateTime()}: Restoring early-deleted posts from backup.`);
   await redis.zAdd(`early-deleted-posts-v${dbVersion}`, ...originalDatabase.early_deleted_posts.map((post) => ({ member: post.member, score: post.score })));
-// TODO: Add late-deleted post queue if it is needed!
-//  console.log(`${getDateTime()}: Restoring late-deleted post queue from backup.`);
-//  await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, ...originalDatabase.late_deleted_post_queue.map((post) => ({ member: post.member, score: post.score })));
   console.log(`${getDateTime()}: Restoring current streaks from backup.`);
   await redis.zAdd(`current-streaks-v${dbVersion}`, ...originalDatabase.current_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
   console.log(`${getDateTime()}: Restoring current COAD streaks from backup.`);
@@ -79,7 +117,7 @@ async function restoreDatabaseBackup() {
   const nPosts = await redis.zCard(`posts-v${dbVersion}`);
   let i = 0;
   for (const [postId, postInfo] of Object.entries(originalDatabase.post_info)) {
-    if (i % 1000 == 0) { console.log(`${getDateTime()}: Restoring post info for ${i}/${nPosts} posts (${i/nPosts*100}%).`); }
+    if (i % 1000 == 0) { console.log(`${getDateTime()}: Restoring post info for ${i}/${nPosts} posts (${(i / nPosts * 100).toFixed(1)}%).`); }
     const postInfoStr = String(postInfo);
     await redis.set(`post-info-${postId}-v${dbVersion}`, postInfoStr);
      i++;
@@ -100,9 +138,7 @@ triggers.post('/on-app-install', async (c) => {
 
   const dbVersion = '1';
   await redis.set('database-version', dbVersion);
-  await restoreDatabaseBackup();
-
-  throw new Error('The chickenladybot is not yet ready to be installed. Please wait for the next update, or contact the developer if you want to help with development.');
+  await restoreDatabaseBackup(false);
 
   return c.json<TriggerResponse>({status: 'success',},200);
 });
@@ -110,13 +146,6 @@ triggers.post('/on-app-install', async (c) => {
 triggers.post('/on-app-upgrade', async (c) => {
   const input = await c.req.json<OnAppUpgradeRequest>();
   console.log('App upgraded in subreddit: r/' + input.subreddit?.name);
-
-  const dbVersion = '1';
-  await redis.set('database-version', dbVersion);
-//  await restoreDatabaseBackup();
-
-  // FIXME: REMOVE FOR TESTING PURPOSES!
-  await redis.set('current-count-post-id-v' + dbVersion, '1tyqxix');
 
   return c.json<TriggerResponse>({status: 'success',},200);
 });

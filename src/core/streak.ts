@@ -111,10 +111,15 @@ async function updateUserFlair(username: string, streak: number) {
 		let userFlair = "";
 		if (flairText.length > 0) { userFlair = flairText + " - "; }
 
-		userFlair += "Streak: " + streak;
+    if (streak > 0) { userFlair += "Streak: " + streak; }
+    else { userFlair = flairText; }
+
 		if (username === "chickenladybot") { userFlair = "Streak: 3.1415926535"; }
 
-		if (currentFlair != userFlair) { await reddit.setUserFlair({ username: username, subredditName: context.subredditName, text: userFlair }); }
+		if (currentFlair != userFlair) {
+      console.log(`${getDateTime()}: Updating flair for user ${username} to streak ${streak} (current flair: '${currentFlair}', flair text: '${flairText}', new flair: '${userFlair}')`);
+      await reddit.setUserFlair({ username: username, subredditName: context.subredditName, text: userFlair });
+    }
 	}
 }
 
@@ -157,7 +162,8 @@ export async function handleBackgroundStreak() {
   if (await taskScheduler.endTask()) { return false; }
   const dbVersion = await DBVersion();
 	let currentUserScore = parseInt(await redis.get(`background-task-tracker-v${dbVersion}`) ?? '0');
-  console.log(`${getDateTime()}: Starting streak background update from user score ${currentUserScore}`);
+  let nUsers = await redis.zCard(`users-v${dbVersion}`);
+  console.log(`${getDateTime()}: Starting streak background update from user score ${currentUserScore} out of ${nUsers} users`);
 	while (true && await taskScheduler.startNextTask()) {
 		const currentUser = (await redis.zRange(`users-v${dbVersion}`, currentUserScore, '+inf', { by: 'score' }))[0];
 		if (currentUser == undefined) {
@@ -173,6 +179,5 @@ export async function handleBackgroundStreak() {
 		currentUserScore = currentUser.score + 1;
 		await redis.set(`background-task-tracker-v${dbVersion}`, currentUserScore.toString());
 	}
-  console.log(`${getDateTime()}: Ended streak background update at user score ${currentUserScore}`);
   return false;
 }

@@ -1,9 +1,9 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
-import { reddit } from '@devvit/web/server';
+import { context, reddit } from '@devvit/web/server';
 import { Post } from '@devvit/web/server';
 
-export async function botExplainer(): Promise<string> { return "\n\n^(This piece of content has been created automatically by a bot. If you think it made a mistake, [contact the mods](https://www.reddit.com/message/compose/?to=/r/countwithchickenlady) via modmail. The code for this bot is fully open source, and can be found [here](https://github.com/AartvB/chickenladybot).)"; }
+export async function botExplainer(): Promise<string> { return `\n\n^(This piece of content has been created automatically by a bot. If you think it made a mistake, [contact the mods](https://www.reddit.com/message/compose/?to=/r/${context.subredditName}) via modmail. The code for this bot is fully open source, and can be found [here](https://github.com/AartvB/chickenladybot).)`; }
 export async function isPostDeleted(post: Post): Promise<boolean> { return post.authorName == '[deleted]' || post.removed; }
 export async function isPostDeletedEarly(postId: T3): Promise<boolean> {
   const dbVersion = await DBVersion();

@@ -42,7 +42,7 @@ export async function addPostToDatabase(postId: T3, postNumber: number, authorNa
 }
 
 async function removePost(postId: T3, commentText: string) {
-  console.log(`${getDateTime()}: Removing post ${postId} with comment: ${commentText}`);
+  console.log(`${getDateTime()}: Removing post ${postId}`);
   await reddit.remove(postId, false);
   const postInfo = await reddit.getPostById(postId);
   let message = commentText;
@@ -120,7 +120,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
         else { await addPostToDatabase(postId as T3, postNumber, post.authorName, post.createdAt.getTime()); }
       }
       else {
-        const currentCountLink = await redis.get(`current-count-link-v${dbVersion}`);
+        const currentCountLink = `https://www.reddit.com/r/${context.subredditName}/comments/${await redis.get(`current-count-post-id-v${dbVersion}`)}/`;
         if (currentCountLink == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
         const commentText = `This post has been removed because the correct next number was ${currentCount + 1}, but this post has '${postNumber}' as title. Please check the most recent number before posting. You can find the correct number in [this](${currentCountLink}) post.\n\nIt might be possible that someone else simply was slightly faster with their post.\n\nFeel free to post again with the correct new number.`;
 
@@ -129,7 +129,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
     }
     else if (!post.approved) {
       // Leave a comment explaining the removal
-      const currentCountLink = await redis.get(`current-count-link-v${dbVersion}`);
+      const currentCountLink = `https://www.reddit.com/r/${context.subredditName}/comments/${await redis.get(`current-count-post-id-v${dbVersion}`)}/`;
       if (currentCountLink == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
       const commentText = `This post has been removed because the title must be a number. Please only post the next number in sequence. You can find the correct number in [this](${currentCountLink}) post.`;
 
@@ -160,10 +160,7 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
   }
 
   while (true && await taskScheduler.startNextTask()) {
-    const posts = await reddit.getNewPosts({
-      subredditName: subreddit.name,
-      limit: limit
-    });
+    const posts = await reddit.getNewPosts({ subredditName: subreddit.name, limit: limit });
     
     let nExtraPostsToDo = nSubsequentChecks;
     let newPostIds: T3[] = [];

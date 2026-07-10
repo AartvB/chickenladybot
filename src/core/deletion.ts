@@ -4,6 +4,7 @@ import { reddit } from '@devvit/web/server';
 import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly, getDateTime } from './helpers';
 
 export async function removePostFromDatabase(postId: T3, early_removal: boolean) {
+	console.log(`${getDateTime()}: Removing post ${postId} from the database. Early removal: ${early_removal}`);
 	const dbVersion = await DBVersion();
 
 	const alreadyDeletedEarly = await redis.zScore(`early-deleted-posts-v${dbVersion}`, postId) != undefined;
@@ -34,7 +35,7 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 	await redis.zAdd(`posts-per-user-v${dbVersion}`, { member: authorName, score: currentPostsPerUser - 1 });
 
 	let nZeroes = 1;
-  while (true) {
+	while (true) {
 		const zeroesString = '0'.repeat(nZeroes);
 		const keyExists = await redis.exists(`whole-count-1${zeroesString}-posts-v${dbVersion}`);
 		if (!keyExists) { break; }
@@ -42,7 +43,7 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 		await redis.zAdd(`whole-count-1${zeroesString}-users-v${dbVersion}`, { member: authorName, score: currentPostCount - 1 });
 		await redis.zRem(`whole-count-1${zeroesString}-posts-v${dbVersion}`, [postId]);
 		nZeroes += 1;
-  }
+	}
 
 	const isIdenticalDigits = await redis.zScore(`identical-digits-posts-v${dbVersion}`, postId) != undefined;
 	if (isIdenticalDigits) {
@@ -64,7 +65,7 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 	await redis.zRem(`post-upvotes-v${dbVersion}`, [postId]);
 	await redis.zRem(`post-comments-v${dbVersion}`, [postId]);
 	await redis.zRem(`posts-of-${authorName}-v${dbVersion}`, [postId]);
-  await redis.zAdd(`posts-per-user-v${dbVersion}`, { member: authorName, score: await redis.zCard(`posts-of-${authorName}-v${dbVersion}`) });
+  	await redis.zAdd(`posts-per-user-v${dbVersion}`, { member: authorName, score: await redis.zCard(`posts-of-${authorName}-v${dbVersion}`) });
 
 	if (early_removal) {
 		await redis.zAdd(`early-deleted-posts-v${dbVersion}`, { member: postId, score: Date.now() });

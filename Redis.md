@@ -34,7 +34,6 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **current-background-task**: Which background process is currently running. Either 'flair', 'leaderboard' or 'cleanup'.
 - **background-task-tracker**: Which part of the background task must be executed next.
 - **current-count**: The current count of the subreddit.
-- **current-count-link**: The link of the post that shows what the current count is (TODO: REMOVE THIS IN THE FUTURE, WE ALREADY HAVE CURRENT-COUNT-POST-ID).
 - **current-count-post-id**: The id of the post that shows what the current count is.
 - **new-post-limit**: The number of posts to process at once when checking for new posts.
 

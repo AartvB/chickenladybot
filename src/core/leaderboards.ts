@@ -3,8 +3,6 @@ import { T3 } from '@devvit/shared-types/tid.js';
 import { context, reddit } from '@devvit/web/server';
 import { DBVersion, getDateTime, TaskScheduler } from './helpers';
 
-// FIXME: All leaderboards: check if they are in the correct order!
-
 async function updateCountLeaderboard() {
 	// The leaderboard on the wiki that shows which users have counted the most, and how many times they have counted.
 	let postCounts = await redis.zRange(`posts-per-user-v${await DBVersion()}`, -1000, -1);
@@ -55,7 +53,7 @@ async function updateWholeCountsLeaderboards() {
 			previousCount = post.score;
 			rowNumber += 1;
 			const postId = post.member;
-			const postInfo = await redis.get(`post-info-${postId}`);
+			const postInfo = await redis.get(`post-info-${postId}-v${dbVersion}`);
 			if (postInfo == undefined) { continue; }
 			const authorName = JSON.parse(postInfo).authorName;
 			const date = JSON.parse(postInfo).date;
@@ -98,6 +96,7 @@ async function updateMostCommentsLeaderboard() {
 	previousCount = 0;
 	previousRank = 0;
 	rowNumber = 1;
+	topCommentsUsers = Object.fromEntries(Object.entries(topCommentsUsers).sort(([, a], [, b]) => b - a)); // Sort the users by number of appearences in top 100
 	for (const [user, count] of Object.entries(topCommentsUsers)) {
 		previousRank = count == previousCount ? previousRank : rowNumber;
 		previousCount = count;
@@ -140,6 +139,7 @@ async function updateMostUpvotesLeaderboard() {
 	previousCount = 0;
 	previousRank = 0;
 	rowNumber = 1;
+	topUpvotesUsers = Object.fromEntries(Object.entries(topUpvotesUsers).sort(([, a], [, b]) => b - a)); // Sort the users by number of appearences in top 100
 	for (const [user, count] of Object.entries(topUpvotesUsers)) {
 		previousRank = count == previousCount ? previousRank : rowNumber;
 		previousCount = count;
@@ -296,7 +296,8 @@ export async function handleLeaderboards() {
 	const dbVersion = await DBVersion();
 	let currentTask = await redis.get(`background-task-tracker-v${dbVersion}`) ?? 'posts-0';
 	if (/^posts-(\d+)$/.test(currentTask)) {
-		console.log(`${getDateTime()}: Starting leaderboard background update (checking upvotes and comment count) from post score ${currentTask.split('-')[1] ?? '0'}`);
+		const score = currentTask.split('-')[1] ?? '0'
+		console.log(`${getDateTime()}: Starting leaderboard background update (checking upvotes and comment count) from post score ${score} (${new Date(parseInt(score)).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })})`);
 		let currentPostScore = parseInt(currentTask.split('-')[1] ?? '0');
 		const now = Date.now();
 		if (currentPostScore == 0) {
@@ -324,7 +325,7 @@ export async function handleLeaderboards() {
 		}
 	}
 	if (/^users-(\d+)$/.test(currentTask)) {
-		console.log(`${getDateTime()}: Starting leaderboard background update (streaks) from user score ${currentTask.split('-')[1] ?? '0'}`);
+		console.log(`${getDateTime()}: Starting leaderboard background update (streaks) from user score ${currentTask.split('-')[1] ?? '0'} (total users: ${await redis.zCard(`users-v${dbVersion}`)})`);
 		let currentUserScore = parseInt(currentTask.split('-')[1] ?? '0');
 		while (true) {
 			if (!await taskScheduler.startNextTask()) { return false; }
