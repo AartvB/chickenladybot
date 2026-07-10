@@ -10,6 +10,8 @@ import { ContentfulStatusCode } from 'hono/utils/http-status';
 export const tasks = new Hono();
 
 tasks.post('/new-post-handler', async (c) => {
+  // Check for new posts or add new posts to the database
+
   // Only do this if this action is not currently being executed in parralel
   const lockKey = `new-post-handler-lock-v${await DBVersion()}`;
   const now = Date.now();
@@ -29,6 +31,7 @@ tasks.post('/new-post-handler', async (c) => {
 });
 
 tasks.post('/streak-handler', async (c) => {
+  // Calculate streaks that have been added to the streak queue
   const lockKey = `streak-handler-lock-v${await DBVersion()}`;
   const now = Date.now();
   const lockStatus = await redis.get(lockKey);
@@ -45,6 +48,7 @@ tasks.post('/streak-handler', async (c) => {
 });
 
 tasks.post('/deleted-post-handler', async (c) => {
+  // Handle the early deleted post queue
   const lockKey = `deleted-post-handler-lock-v${await DBVersion()}`;
   const now = Date.now();
   const lockStatus = await redis.get(lockKey);

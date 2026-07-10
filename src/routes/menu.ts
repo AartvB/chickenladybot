@@ -6,6 +6,7 @@ import { reddit } from '@devvit/web/server';
 export const menu = new Hono();
 
 menu.post('/toggle-shutdown', async (c) => {
+  // A form that allows a moderator to shutdown the bot in case it goes haywire, or restore it to normal services
   if (await isInHardShutdown()) {
     return c.json<UiResponse>({
       showForm: {
@@ -71,6 +72,7 @@ menu.post('/toggle-shutdown', async (c) => {
 });
 
 menu.post('/add-post-to-streak-database', async (c) => {
+  // Allows a moderator to add a post manually to the streak database
   const values = await c.req.json<{targetId?: string}>();
   const postId = values.targetId?.slice(3) ?? '';
   return c.json<UiResponse>({
@@ -94,6 +96,7 @@ menu.post('/add-post-to-streak-database', async (c) => {
 });
 
 menu.post('/remove-post-from-streak-database', async (c) => {
+  // Allows a mod to remove a post manually from the streak database
   const values = await c.req.json<{targetId?: string}>();
   const postId = values.targetId?.slice(3) ?? '';
   return c.json<UiResponse>({
@@ -117,6 +120,7 @@ menu.post('/remove-post-from-streak-database', async (c) => {
 });
 
 menu.post('/add-manual-streak', async (c) => {
+  // Allows a mod to set the streak of the user at a certain post
   const values = await c.req.json<{targetId?: string}>();
   const postId = values.targetId?.slice(3) ?? '';
   return c.json<UiResponse>({
@@ -146,6 +150,7 @@ menu.post('/add-manual-streak', async (c) => {
 });
 
 menu.post('/view-streak-development', async (c) => {
+  // Allows a mod to view the latest post of a user, and how their streak developed over these posts
   const values = await c.req.json<{targetId?: string}>();
   const postId = values.targetId;
   if (postId == undefined) { return c.json<UiResponse>({ showToast: 'Post info not found',}, 200); }

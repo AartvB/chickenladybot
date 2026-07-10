@@ -31,9 +31,9 @@ export async function updateTargetPost() {
   const targetPost = await reddit.getPostById(targetPostId as T3);
 
   if (await isInSoftShutdown()) {
-    const text = `The bot is currently under maintenance. Our apologies for the inconvenience. Please [sort by new](https://www.reddit.com/r/${targetPost.subredditName}/new/) to see what the next number in the sequence should be, and use this number as the title for your new post.` + await botExplainer();
+    const text = `The bot is currently under maintenance. Our apologies for the inconvenience. Please [sort by new](https://www.reddit.com/r/${targetPost.subredditName}/new/) to see what the next number in the sequence should be, and use this number as the title for your new post. If someone posts with the wrong number, it will be removed by the bot when it gets back online. Ignore the wrong post, and use the correct number for your post.` + await botExplainer();
     await targetPost.edit({ text: text });
-    return { status: 'ok', message: `Successfully processed new posts`, number: 200 };
+    return { status: 'ok', message: `Successfully processed new posts, but the process was stopped due to a shutdown`, number: 200 };
   }
 
   const currentCountString = await redis.get(`current-count-v${dbVersion}`);

@@ -7,6 +7,7 @@ import originalDatabase from '../core/original_database.json';
 export const triggers = new Hono();
 
 async function restoreDatabaseBackup(removeExistingData: boolean = true) {
+  // Restore backup from the database of the original chickenbot that used PRAW and SQLLite
   const dbVersion = await DBVersion();
   await redis.set('new-post-handler-lock-v' + dbVersion, 'open');
   await redis.set('streak-handler-lock-v' + dbVersion, 'open');
@@ -132,6 +133,8 @@ async function restoreDatabaseBackup(removeExistingData: boolean = true) {
   console.log(`${getDateTime()}: Database backup restored successfully for version ${dbVersion}.`);
 }
 
+// TODO: Write code to update redis database when the database has been restored after accidentally removing the bot from the subreddit.
+
 triggers.post('/on-app-install', async (c) => {
   const input = await c.req.json<OnAppInstallRequest>();
   console.log('App installed to subreddit: r/' + input.subreddit?.name);
@@ -151,6 +154,7 @@ triggers.post('/on-app-upgrade', async (c) => {
 });
 
 triggers.post('/on-post-delete', async (c) => {
+  // When a post gets deleted, add it to the early (within 10 minutes) or late (after 10 minutes) queue.
   const input = await c.req.json<OnPostDeleteRequest>();
   const dbVersion = await DBVersion();
   const postId = input.postId;
