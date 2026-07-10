@@ -291,7 +291,7 @@ async function updateStreakLeaderboard() {
 }
 
 export async function handleLeaderboards() {
-	let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+	const taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
 	if (await taskScheduler.endTask()) { return false; }
 	const dbVersion = await DBVersion();
 	let currentTask = await redis.get(`background-task-tracker-v${dbVersion}`) ?? 'posts-0';

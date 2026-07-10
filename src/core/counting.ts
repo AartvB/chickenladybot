@@ -47,7 +47,7 @@ async function removePost(postId: T3, commentText: string) {
   const postInfo = await reddit.getPostById(postId);
   let message = commentText;
 
-  let streak = (await redis.zScore(`current-streaks-v${await DBVersion()}`, postInfo.authorName)) ?? 0;
+  const streak = (await redis.zScore(`current-streaks-v${await DBVersion()}`, postInfo.authorName)) ?? 0;
   if (streak >= 4 && postInfo.createdAt.getTime() < Date.now() - 4 * 60000) { message += '\n\nTechnical issues caused the bot to remove this post much later than normal. We try our best to keep things running smoothly, but sometimes the system runs into issues. Note, this does not count as your post for the day, feel free to post again.\n\nIf this causes you to miss a day and your streak was reset due to the late removal, feel free to reach out to the mods [here](https://www.reddit.com/message/compose/?to=/r/countwithchickenlady) and we can reinstate it.'; }
   message += await botExplainer();
 
@@ -55,7 +55,7 @@ async function removePost(postId: T3, commentText: string) {
 }
 
 export async function handleNewPosts(): Promise<{ status: string; message: string; number: number }> {
-  let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+  const taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
   if (await taskScheduler.endTask()) { if (!await isInSoftShutdown()) { return { status: 'error', message: 'Background task stopped due to time limit', number: 503 }; } else { return { status: 'ok', message: 'Background task stopped due to shutdown', number: 200 }; } }
   const dbVersion = await DBVersion();
   while (await redis.zCard(`new-post-queue-v${dbVersion}`) > 0 && await taskScheduler.startNextTask()) {
@@ -78,9 +78,9 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
       if (post.approved) { await addPostToDatabase(postId as T3, postNumber, post.authorName, post.createdAt.getTime()); }
       else if (postNumber == currentCount + 1 || currentCount == 0) {
         // Check if the user has posted twice on the same calendar day in the last 3 days
-        let postDateTimes = [[postId, post.createdAt.getTime()]];
+        const postDateTimes = [[postId, post.createdAt.getTime()]];
 
-        let earlierPosts = (await redis.zRange(`posts-of-${post.authorName}-v${dbVersion}`, -20, -1)).reverse();
+        const earlierPosts = (await redis.zRange(`posts-of-${post.authorName}-v${dbVersion}`, -20, -1)).reverse();
         for (const postInfo of earlierPosts) {
           const earlierPostId = postInfo['member'];
           if (await isPostDeletedEarly(earlierPostId as T3)) { continue; }
@@ -135,7 +135,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
 
       await removePost(postId as T3, commentText);
     }
-    else {} // Valid post detected, but not added to the database since it's not a number
+    // Otherwise a valid post detected, but not added to the database since it's not a number
 
     await redis.zRem(`new-post-queue-v${dbVersion}`, [postId]);
   }
@@ -144,7 +144,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
 }
 
 export async function detectNewPosts(): Promise<{ message: string; status: string; number: number }> {
-  let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+  const taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
   if (await taskScheduler.endTask()) { if (!await isInSoftShutdown()) { return { status: 'error', message: 'Background task stopped due to time limit', number: 503 }; } else { return { status: 'ok', message: 'Background task stopped due to shutdown', number: 200 }; } }
   const dbVersion = await DBVersion();
   const nSubsequentChecks = 5; // Number of extra subsequent existing posts to check when finding an existing post
@@ -159,13 +159,13 @@ export async function detectNewPosts(): Promise<{ message: string; status: strin
     return { status: 'error', message: 'Subreddit not found', number: 404 };
   }
 
-  while (true && await taskScheduler.startNextTask()) {
+  while (await taskScheduler.startNextTask()) {
     const posts = await reddit.getNewPosts({ subredditName: subreddit.name, limit: limit });
     
     let nExtraPostsToDo = nSubsequentChecks;
-    let newPostIds: T3[] = [];
+    const newPostIds: T3[] = [];
     for await (const post of posts) {
-      let score = await redis.zScore(`posts-v${dbVersion}`, post.id);
+      const score = await redis.zScore(`posts-v${dbVersion}`, post.id);
       if (score == undefined) {
         newPostIds.push(post.id);
         nExtraPostsToDo = nSubsequentChecks;

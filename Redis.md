@@ -44,4 +44,4 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 
 ## Group of single values
 - **post-info-\[postId\]**: Each of these values contains a stringified JSON overview containing post info, namely 'authorName', 'postNumber', 'date' (UTC).
-- **other-streaks-of-\[username\]**: Each of these values contains a stringified JSON overview containing a list of other streaks, namely 'streak', 'source', 'timestamp' (either 'COAD' or 'local'). Example: [{'streak': 5, 'source':'COAD', 'timestamp':'12345'},{'streak': 9, 'source':'LOCAL', 'timestamp':'23456'}].
+- **other-streaks-of-\[username\]**: Each of these values contains a stringified JSON overview containing a list of other streaks, namely 'streak', 'source', 'timestamp' (either 'COAD' or 'local'). Example: [{'streak': 5, 'source':'COAD', 'timestamp':12345},{'streak': 9, 'source':'LOCAL', 'timestamp':23456}].

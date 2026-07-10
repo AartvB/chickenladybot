@@ -154,7 +154,7 @@ triggers.post('/on-post-delete', async (c) => {
   const input = await c.req.json<OnPostDeleteRequest>();
   const dbVersion = await DBVersion();
   const postId = input.postId;
-  let timestamp_str = input.createdAt;
+  const timestamp_str = input.createdAt;
   let timestamp: number;
   if (timestamp_str) { timestamp = new Date(timestamp_str).getTime(); }
   else { timestamp = await redis.zScore(`posts-v${dbVersion}`, postId) || Date.now(); }

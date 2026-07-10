@@ -88,14 +88,14 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 			await txn.set(`current-count-v${dbVersion}`, JSON.parse(latestPostInfo).postNumber);
 			if (await txn.exec()) { await updateTargetPost(); }
 		}
-		txn.unwatch();
+		await txn.unwatch();
 	}
 	else { await redis.del(`post-info-${postId}-v${dbVersion}`); }
 }
 export async function handleDeletedPosts() {
 // Handles posts that have been deleted within 10 minutes of posting
 // Only removes from the beginning of the queue
-	let taskScheduler = new TaskScheduler({});
+	const taskScheduler = new TaskScheduler({});
 	if (await taskScheduler.endTask()) { return false; }
 	const dbVersion = await DBVersion();
 
@@ -154,7 +154,7 @@ async function removeUserInfo(username: string) {
 }
 export async function handleCleanup(): Promise<boolean> {
 // Remove post data from the database if the post has been deleted for more than 21 days, to protect user privacy. Also remove data from accounts that have no posts left on the subreddit.
-	let taskScheduler = new TaskScheduler( { stopAtSoftShutdown: true });
+	const taskScheduler = new TaskScheduler( { stopAtSoftShutdown: true });
 	if (await taskScheduler.endTask()) { return false; }
 
 	const dbVersion = await DBVersion();

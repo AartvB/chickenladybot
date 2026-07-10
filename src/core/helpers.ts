@@ -28,7 +28,7 @@ export async function updateTargetPost() {
   const dbVersion = await DBVersion();
   const targetPostId = await redis.get(`current-count-post-id-v${dbVersion}`);
   if (targetPostId == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
-  let targetPost = await reddit.getPostById(targetPostId as T3);
+  const targetPost = await reddit.getPostById(targetPostId as T3);
 
   if (await isInSoftShutdown()) {
     const text = `The bot is currently under maintenance. Our apologies for the inconvenience. Please [sort by new](https://www.reddit.com/r/${targetPost.subredditName}/new/) to see what the next number in the sequence should be, and use this number as the title for your new post.` + await botExplainer();

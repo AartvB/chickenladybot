@@ -3,7 +3,7 @@ import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime } from './hel
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
-async function calculateStreakForTimezone(earlierTimestamps: number[], otherStreakSources: any, timestamp: number, timeZone: string): Promise<{ streak: number, CoadStreak: number}> {
+async function calculateStreakForTimezone(earlierTimestamps: number[], otherStreakSources: undefined | {streak: number, source: string, timestamp: number}[], timestamp: number, timeZone: string): Promise<{ streak: number, CoadStreak: number}> {
   // TODO: Stop loop if it is clear that it won't get better. For example, the last post was more than 48 hours ago.
   // TODO: Handle LOCAL saved streaks
 
@@ -12,14 +12,14 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
 
   // Transform all timestamps to dates
   const dateFormatter = new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'});
-  let todayDatetime = new Date(timestamp);
-  let today = dateFormatter.format(todayDatetime);
-  let yesterdayDatetime = new Date(timestamp);
+  const todayDatetime = new Date(timestamp);
+  const today = dateFormatter.format(todayDatetime);
+  const yesterdayDatetime = new Date(timestamp);
   yesterdayDatetime.setDate(yesterdayDatetime.getDate() - 1);
-  let yesterday = dateFormatter.format(yesterdayDatetime);
+  const yesterday = dateFormatter.format(yesterdayDatetime);
 
   // Find all possible COAD streaks
-  let CoadDates = [];
+  const CoadDates = [];
   if (otherStreakSources != undefined) {
     for (const streak of otherStreakSources) {
       if (streak.source === 'COAD') {
@@ -38,11 +38,12 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
       lastTimestamp = postTimestamp;
     }
     else if (lastTimestamp != null) { // This was not the first post
-      let previousDayDatetime = new Date(lastTimestamp);
+      const previousDayDatetime = new Date(lastTimestamp);
       previousDayDatetime.setDate(previousDayDatetime.getDate() - 1);
       if (postDate == dateFormatter.format(previousDayDatetime)) { // The previous post was one day apart
         for (const [date, streakValue] of CoadDates) {
           if (date === postDate) {
+            if (typeof streakValue != 'number') { throw new Error(`Invalid streak value: ${streakValue}`); }
             CoadStreak = Math.max(CoadStreak, streakValue + streak);
           }
         }
@@ -54,10 +55,11 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
     else { streak = 0; break; } // Previous post was earlier than today or yesterday
 
     if (lastTimestamp != null) {
-      let previousDayDatetime = new Date(lastTimestamp);
+      const previousDayDatetime = new Date(lastTimestamp);
       previousDayDatetime.setDate(previousDayDatetime.getDate() - 1);
       for (const [date, streakValue] of CoadDates) {
         if (date === dateFormatter.format(previousDayDatetime)) {
+          if (typeof streakValue != 'number') { throw new Error(`Invalid streak value: ${streakValue}`); }
           CoadStreak = Math.max(CoadStreak, streakValue + streak);
         }
       }
@@ -71,8 +73,8 @@ async function calculateStreak(username: string, timestamp?: number): Promise<{ 
   // Note that the streak is not recorded in the database!
   const dbVersion = await DBVersion();
   if (timestamp == undefined) { timestamp = Date.now(); }
-  let earlierPosts = await redis.zRange(`posts-of-${username}-v${dbVersion}`, 0, -1);
-  let earlierTimestamps = [];
+  const earlierPosts = await redis.zRange(`posts-of-${username}-v${dbVersion}`, 0, -1);
+  const earlierTimestamps = [];
   for (const postInfo of earlierPosts) {
     const earlierTimestamp = postInfo['score'];
     if (earlierTimestamp > timestamp) { continue; } // Only handle timestamps before the current timestamp
@@ -80,8 +82,12 @@ async function calculateStreak(username: string, timestamp?: number): Promise<{ 
     earlierTimestamps.push(earlierTimestamp);
   }
 
-  let otherStreakSources = await redis.get(`other-streaks-of-${username}-v${dbVersion}`);
-  if (otherStreakSources != undefined) { otherStreakSources = JSON.parse(otherStreakSources); }
+  const otherStreakSourcesStr = await redis.get(`other-streaks-of-${username}-v${dbVersion}`);
+  let otherStreakSources = undefined;
+  if (otherStreakSourcesStr != undefined) {
+    otherStreakSources = JSON.parse(otherStreakSourcesStr);
+    console.log(`typeof otherStreakSources: ${typeof otherStreakSources}, value: ${otherStreakSources}`);
+  }
 
   let maxStreak = 0;
   let maxCoadStreak = 0;
@@ -102,7 +108,7 @@ async function getTextFromFlair(text: string): Promise<string> {
 async function updateUserFlair(username: string, streak: number) {
 	const user = await reddit.getUserByUsername(username);
 	if (user) {
-		let flairGenerator = await user.getUserFlairBySubreddit(context.subredditName);
+		const flairGenerator = await user.getUserFlairBySubreddit(context.subredditName);
 		let currentFlair = '';
 		if (flairGenerator != undefined) { currentFlair = flairGenerator.flairText? flairGenerator.flairText : ''; }
 
@@ -126,7 +132,7 @@ async function updateUserFlair(username: string, streak: number) {
 export async function handleStreak(): Promise<{ status: string; message: string; number: number }> {
 	// Only removes from the beginning of the queue
   const dbVersion = await DBVersion();
-  let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+  const taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
 	
   while (await redis.zCard(`streak-queue-v${dbVersion}`) > 0 && await taskScheduler.startNextTask()) {
     const postInfo = (await redis.zRange(`streak-queue-v${dbVersion}`, 0, 0))[0];
@@ -158,13 +164,13 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 }
 
 export async function handleBackgroundStreak() {
-  let taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
+  const taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
   if (await taskScheduler.endTask()) { return false; }
   const dbVersion = await DBVersion();
 	let currentUserScore = parseInt(await redis.get(`background-task-tracker-v${dbVersion}`) ?? '0');
-  let nUsers = await redis.zCard(`users-v${dbVersion}`);
+  const nUsers = await redis.zCard(`users-v${dbVersion}`);
   console.log(`${getDateTime()}: Starting streak background update from user score ${currentUserScore} out of ${nUsers} users`);
-	while (true && await taskScheduler.startNextTask()) {
+	while (await taskScheduler.startNextTask()) {
 		const currentUser = (await redis.zRange(`users-v${dbVersion}`, currentUserScore, '+inf', { by: 'score' }))[0];
 		if (currentUser == undefined) {
 			return true;
