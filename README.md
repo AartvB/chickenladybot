@@ -27,7 +27,7 @@ The bot does the following things:
 - There are additional functionalities of this bot, which are for now handled by the code on [this](https://github.com/AartvB/ChickenDiscord) github repository.
 
 ## TODO
-- Write code to allow a database update
+- Write code to allow a database update (update the database in case someone accidentally removes the bot, removing all redis data until it can be restored.)
 - Work through all 'TODO's in the code (none of them are critical at this point, they are all there for additional features)
 
 ## License
