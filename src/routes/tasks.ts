@@ -3,7 +3,7 @@ import { handleBackgroundStreak, handleStreak } from '../core/streak';
 import { handleNewPosts, detectNewPosts } from '../core/counting';
 import { handleCleanup, handleDeletedPosts } from '../core/deletion';
 import { handleLeaderboards } from '../core/leaderboards';
-import { DBVersion } from '../core/helpers';
+import { DBVersion, getDateTime, restoreDatabaseBackup } from '../core/helpers';
 import { redis, type TaskResponse } from '@devvit/web/server';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -65,7 +65,8 @@ tasks.post('/deleted-post-handler', async (c) => {
 });
 
 tasks.post('/background-task-handler', async (c) => {
-  // Handles tasks that are not time-sensitive. It performs 3 tasks: 'flair', 'leaderboard' and 'cleanup'.
+  // Handles tasks that are not time-sensitive. It performs 4 tasks: 'setup', 'flair', 'leaderboard' and 'cleanup'.
+  // Setup: Setup the database for the first time, when the bot is installed.
   // Flair: Check flair of all users if it is still accurate. If a user has not posted for too long, their streak should be reset to 0.
   // Leaderboard: Update the leaderboard statistics and update the leaderboard.
   // Cleanup: Remove posts that have been deleted more than 21 days ago from the database, for privacy reasons.
@@ -86,6 +87,12 @@ tasks.post('/background-task-handler', async (c) => {
   }
   else if (currentTask == 'cleanup') {
     if (await handleCleanup()) {
+      await redis.set(`current-background-task-v${await DBVersion()}`, 'flair');
+      await redis.del(`background-task-tracker-v${await DBVersion()}`);
+    }
+  }
+  else if (currentTask == 'setup') {
+    if (await restoreDatabaseBackup(false)) {
       await redis.set(`current-background-task-v${await DBVersion()}`, 'flair');
       await redis.del(`background-task-tracker-v${await DBVersion()}`);
     }

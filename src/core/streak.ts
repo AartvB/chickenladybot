@@ -86,7 +86,6 @@ async function calculateStreak(username: string, timestamp?: number): Promise<{ 
   let otherStreakSources = undefined;
   if (otherStreakSourcesStr != undefined) {
     otherStreakSources = JSON.parse(otherStreakSourcesStr);
-    console.log(`typeof otherStreakSources: ${typeof otherStreakSources}, value: ${otherStreakSources}`);
   }
 
   let maxStreak = 0;

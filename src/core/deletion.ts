@@ -122,9 +122,7 @@ export async function handleDeletedPosts() {
 		await redis.zAdd(`early-deleted-posts-v${dbVersion}`, { member: postId, score: Date.now() });
 		await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId]);
 
-		if (await taskScheduler.endTask()) {
-			return false;
-		}
+		if (await taskScheduler.endTask()) { return false; }
 	}
 
 	return true
