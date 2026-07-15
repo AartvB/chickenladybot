@@ -36,6 +36,9 @@ triggers.post('/on-post-delete', async (c) => {
   const input = await c.req.json<OnPostDeleteRequest>();
   const dbVersion = await DBVersion();
   const postId = input.postId;
+
+  if (await redis.zScore(`posts-v${dbVersion}`, postId) == undefined) { return c.json<TriggerResponse>({status: 'success',}, 200); } // It is not in the post database, so it was removed by the bot. It might also be the case that it was deleted while it was being added to the posts database, but then it will be caught by the recurring deleted-post-handler task.
+
   const timestamp_str = input.createdAt;
   let timestamp: number;
   if (timestamp_str) { timestamp = new Date(timestamp_str).getTime(); }
