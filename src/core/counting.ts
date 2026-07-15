@@ -43,7 +43,6 @@ export async function addPostToDatabase(postId: T3, postNumber: number, authorNa
 
 async function removePost(postId: T3, commentText: string) {
   console.log(`${getDateTime()}: Removing post ${postId}`);
-  await reddit.remove(postId, false);
   const postInfo = await reddit.getPostById(postId);
   let message = commentText;
 
@@ -52,6 +51,7 @@ async function removePost(postId: T3, commentText: string) {
   message += await botExplainer();
 
   await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
+  await reddit.remove(postId, false);
 }
 
 export async function handleNewPosts(): Promise<{ status: string; message: string; number: number }> {
