@@ -30,6 +30,7 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **new-post-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single post handler is active at the same time.
 - **streak-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single streak handler is active at the same time.
 - **deleted-post-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single deleted post handler is active at the same time.
+- **background-task-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single background task handler is active at the same time.
 - **shutdown-lock**: Either 'open', 'soft' or 'hard'. Shuts some or all of the bot functionality down.
 - **current-background-task**: Which background process is currently running. Either 'setup', 'flair', 'leaderboard' and 'cleanup'.
 - **background-task-tracker**: Which part of the background task must be executed next.

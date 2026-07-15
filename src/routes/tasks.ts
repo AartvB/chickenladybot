@@ -72,6 +72,17 @@ tasks.post('/background-task-handler', async (c) => {
   // Cleanup: Remove posts that have been deleted more than 21 days ago from the database, for privacy reasons.
   // It takes many calls to finish a task, and when it finishes a task, it continues with the next task.
 
+  const lockKey = `background-task-handler-lock-v${await DBVersion()}`;
+  const now = Date.now();
+  const lockStatus = await redis.get(lockKey);
+  if (lockStatus != 'open') {
+    const lockTime = parseInt(lockStatus || '0');
+    if (lockTime >= now - 35 * 1000) { // If the lock has been active for more than 35 seconds, release it and continue processing
+      return c.json<TaskResponse>({ status: 'locked' }, 200);
+    }
+  }
+  await redis.set(lockKey, now.toString());
+
   const currentTask = await redis.get(`current-background-task-v${await DBVersion()}`);
   if (currentTask == 'flair') {
     if (await handleBackgroundStreak()) {
@@ -98,5 +109,6 @@ tasks.post('/background-task-handler', async (c) => {
     }
   }
 
+  await redis.set(lockKey, 'open');
   return c.json<TaskResponse>({ status: 'success', message: `Worked on background task ${currentTask}`, number: 200 });
 });
