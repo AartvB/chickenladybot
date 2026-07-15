@@ -3,7 +3,7 @@ import { handleBackgroundStreak, handleStreak } from '../core/streak';
 import { handleNewPosts, detectNewPosts } from '../core/counting';
 import { handleCleanup, handleDeletedPosts } from '../core/deletion';
 import { handleLeaderboards } from '../core/leaderboards';
-import { DBVersion, getDateTime, restoreDatabaseBackup } from '../core/helpers';
+import { DBVersion, restoreDatabaseBackup } from '../core/helpers';
 import { redis, type TaskResponse } from '@devvit/web/server';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
 
