@@ -74,23 +74,23 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 		let message = `This post has been removed by you or a moderator within 10 minutes of posting, or it has been flagged for special deletion because you contacted us through mod mail. Therefore this post does not count as your post for this day and does not contribute to your streak. Feel free to post again.` // TODO: Remove magic number 10
 		message += await botExplainer();
 		await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
-
-		const txn = await redis.watch(`current-count-v${dbVersion}`);
-		const currentCount = await redis.get(`current-count-v${dbVersion}`);
-		if (currentCount == undefined) { await txn.unwatch(); return { status: 'error', message: 'Database error', number: 404 }; }
-		if (currentCount == JSON.parse(postData).postNumber) {
-			const latestPostId = (await redis.zRange(`posts-v${dbVersion}`, -1, -1))[0];
-			if (latestPostId == undefined) { await txn.unwatch(); return { status: 'error', message: 'Database error', number: 404 }; }
-			const latestPostInfo = await redis.get(`post-info-${latestPostId['member']}-v${dbVersion}`);
-			if (latestPostInfo == undefined) { await txn.unwatch(); return { status: 'error', message: 'Database error', number: 404 }; }
-
-			await txn.multi()
-			await txn.set(`current-count-v${dbVersion}`, JSON.parse(latestPostInfo).postNumber);
-			if (await txn.exec()) { await updateTargetPost(); }
-		}
-		await txn.unwatch();
 	}
 	else { await redis.del(`post-info-${postId}-v${dbVersion}`); }
+
+	const txn = await redis.watch(`current-count-v${dbVersion}`);
+	const currentCount = await redis.get(`current-count-v${dbVersion}`);
+	if (currentCount == undefined) { await txn.unwatch(); return { status: 'error', message: 'Database error', number: 404 }; }
+	if (currentCount == JSON.parse(postData).postNumber) {
+		const latestPostId = (await redis.zRange(`posts-v${dbVersion}`, -1, -1))[0];
+		if (latestPostId == undefined) { await txn.unwatch(); return { status: 'error', message: 'Database error', number: 404 }; }
+		const latestPostInfo = await redis.get(`post-info-${latestPostId['member']}-v${dbVersion}`);
+		if (latestPostInfo == undefined) { await txn.unwatch(); return { status: 'error', message: 'Database error', number: 404 }; }
+
+		await txn.multi()
+		await txn.set(`current-count-v${dbVersion}`, JSON.parse(latestPostInfo).postNumber);
+		if (await txn.exec()) { await updateTargetPost(); }
+	}
+	await txn.unwatch();
 }
 export async function handleDeletedPosts() {
 // Handles posts that have been deleted within 10 minutes of posting
