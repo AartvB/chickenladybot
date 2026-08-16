@@ -17,10 +17,11 @@ triggers.post('/on-app-install', async (c) => {
   await redis.set('streak-handler-lock-v' + dbVersion, 'open');
   await redis.set('deleted-post-handler-lock-v' + dbVersion, 'open');
   await redis.set('background-task-handler-lock-v' + dbVersion, 'open');
-  await redis.set('shutdown-lock-v' + dbVersion, 'soft');
+  await redis.set('shutdown-lock-v' + dbVersion, 'hard');
   await redis.set('current-background-task-v' + dbVersion, 'setup');
   await redis.set('new-post-limit-v' + dbVersion, '10');
-  await redis.set('current-count-post-id-v' + dbVersion, '1tyqxix'); // For the official subreddit: '1iulihu'
+  if (input.subreddit?.name == 'countwithchickenlady') { await redis.set('current-count-post-id-v' + dbVersion, '1iulihu'); }
+  if (input.subreddit?.name == 'chickenladybot_dev') { await redis.set('current-count-post-id-v' + dbVersion, '1tyqxix'); }
 
   return c.json<TriggerResponse>({status: 'success',},200);
 });

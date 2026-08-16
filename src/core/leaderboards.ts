@@ -315,7 +315,7 @@ export async function handleLeaderboards() {
 			const postId = currentPost.member;
 			const post = await reddit.getPostById(postId as T3);
 			const upvotes = post.score;
-			const comments = post.numberOfComments // FIXME: Check if this also includes nested comments
+			const comments = post.numberOfComments
 
 			await redis.zAdd(`post-upvotes-v${dbVersion}`, { member: postId, score: upvotes });
 			await redis.zAdd(`post-comments-v${dbVersion}`, { member: postId, score: comments });

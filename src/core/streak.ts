@@ -123,7 +123,8 @@ async function updateUserFlair(username: string, streak: number) {
 
 		if (currentFlair != userFlair) {
       console.log(`${getDateTime()}: Updating flair for user ${username} to streak ${streak} (current flair: '${currentFlair}', flair text: '${flairText}', new flair: '${userFlair}')`);
-      await reddit.setUserFlair({ username: username, subredditName: context.subredditName, text: userFlair });
+      try { await reddit.setUserFlair({ username: username, subredditName: context.subredditName, text: userFlair }); }
+      catch (error) { console.error(`${getDateTime()}: Error updating flair for user ${username} to streak ${streak} (current flair: '${currentFlair}', flair text: '${flairText}', new flair: '${userFlair}'):`, error); }
     }
 	}
 }
