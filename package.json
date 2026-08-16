@@ -28,7 +28,7 @@
     "@types/node": "^22.19.19",
     "devvit": "^0.14.0",
     "eslint": "10.4.0",
-    "globals": "17.6.0",
+    "globals": "17.11.0",
     "prettier": "3.8.3",
     "typescript": "6.0.3",
     "typescript-eslint": "8.59.4",
