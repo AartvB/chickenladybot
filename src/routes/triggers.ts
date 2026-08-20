@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
 import { reddit, redis } from '@devvit/web/server';
-import { addToEndOfQueue, botExplainer, DBVersion, isPostDeletedEarly } from '../core/helpers';
+import { addToEndOfQueue, botExplainer, DBVersion, isPostDeletedEarly, updateTargetPost } from '../core/helpers';
   
 export const triggers = new Hono();
 
@@ -20,9 +20,19 @@ triggers.post('/on-app-install', async (c) => {
   await redis.set('shutdown-lock-v' + dbVersion, 'hard');
   await redis.set('current-background-task-v' + dbVersion, 'setup');
   await redis.set('new-post-limit-v' + dbVersion, '10');
+  await redis.set('current-count-v' + dbVersion, '0');
   if (input.subreddit?.name == 'countwithchickenlady') { await redis.set('current-count-post-id-v' + dbVersion, '1iulihu'); }
-  if (input.subreddit?.name == 'chickenladybot_dev') { await redis.set('current-count-post-id-v' + dbVersion, '1tyqxix'); }
+  else if (input.subreddit?.name == 'chickenladybot_dev') { await redis.set('current-count-post-id-v' + dbVersion, '1vtbmkf'); }
+  else {
+    const post = await reddit.submitPost({subredditName: input.subreddit?.name as string, title: 'Use this to see what the next number is (automatically updated)', text: 'test', runAs: 'APP'});
+    post.approve();
+    post.sticky();
+    await redis.set('current-count-post-id-v' + dbVersion, post.id);
+  }
 
+  console.log(`Current count post id for subreddit ${input.subreddit?.name} is ${await redis.get('current-count-post-id-v' + dbVersion)}`);
+
+  await updateTargetPost();
   return c.json<TriggerResponse>({status: 'success',},200);
 });
 

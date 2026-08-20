@@ -8,18 +8,24 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
   // TODO: Handle LOCAL saved streaks
 
   // Sort timestamps from latest to earliest
-  earlierTimestamps.sort((a, b) => b - a);
+  const sortedTimestamps = [...earlierTimestamps].sort((a, b) => b - a);
 
   // Transform all timestamps to dates
   const dateFormatter = new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'});
-  const todayDatetime = new Date(timestamp);
-  const today = dateFormatter.format(todayDatetime);
-  const yesterdayDatetime = new Date(timestamp);
-  yesterdayDatetime.setDate(yesterdayDatetime.getDate() - 1);
-  const yesterday = dateFormatter.format(yesterdayDatetime);
+  const getDate = (timestamp: number): string => { return dateFormatter.format(new Date(timestamp)); };
+  const getPreviousDate = (date: string): string => {
+    const [year, month, day] = date.split("-").map(Number);
+    if (year == undefined || month == undefined || day == undefined) { throw new Error(`Invalid date format: ${date}`);}
+    const dateUtc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    dateUtc.setUTCDate(dateUtc.getUTCDate() - 1);
+    return dateFormatter.format(dateUtc);
+  };
+
+  const today = getDate(timestamp);
+  const yesterday = getPreviousDate(today);
 
   // Find all possible COAD streaks
-  const CoadDates = [];
+  const CoadDates: [string, number][] = [];
   if (otherStreakSources != undefined) {
     for (const streak of otherStreakSources) {
       if (streak.source === 'COAD') {
@@ -31,19 +37,17 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
   let streak = 0;
   let CoadStreak = 0;
   let lastTimestamp: number|null = null;
-  for (const postTimestamp of earlierTimestamps) {
+  for (const postTimestamp of sortedTimestamps) {
     const postDate = dateFormatter.format(postTimestamp);
     if (lastTimestamp == null && (postDate == today || postDate == yesterday)) { // This was the first post, and it was today or yesterday
       streak = 1;
       lastTimestamp = postTimestamp;
     }
     else if (lastTimestamp != null) { // This was not the first post
-      const previousDayDatetime = new Date(lastTimestamp);
-      previousDayDatetime.setDate(previousDayDatetime.getDate() - 1);
-      if (postDate == dateFormatter.format(previousDayDatetime)) { // The previous post was one day apart
+      const previousDay = getPreviousDate(getDate(lastTimestamp));
+      if (postDate == previousDay) { // The previous post was one day apart
         for (const [date, streakValue] of CoadDates) {
           if (date === postDate) {
-            if (typeof streakValue != 'number') { throw new Error(`Invalid streak value: ${streakValue}`); }
             CoadStreak = Math.max(CoadStreak, streakValue + streak);
           }
         }
@@ -55,11 +59,9 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
     else { streak = 0; break; } // Previous post was earlier than today or yesterday
 
     if (lastTimestamp != null) {
-      const previousDayDatetime = new Date(lastTimestamp);
-      previousDayDatetime.setDate(previousDayDatetime.getDate() - 1);
+      const previousDay = getPreviousDate(getDate(lastTimestamp));
       for (const [date, streakValue] of CoadDates) {
-        if (date === dateFormatter.format(previousDayDatetime)) {
-          if (typeof streakValue != 'number') { throw new Error(`Invalid streak value: ${streakValue}`); }
+        if (date === previousDay) {
           CoadStreak = Math.max(CoadStreak, streakValue + streak);
         }
       }

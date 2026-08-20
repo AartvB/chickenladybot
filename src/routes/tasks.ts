@@ -3,7 +3,9 @@ import { handleBackgroundStreak, handleStreak } from '../core/streak';
 import { handleNewPosts, detectNewPosts } from '../core/counting';
 import { handleCleanup, handleDeletedPosts } from '../core/deletion';
 import { handleLeaderboards } from '../core/leaderboards';
-import { DBVersion, restoreDatabaseBackup } from '../core/helpers';
+//import { DBVersion, restoreDatabaseBackup } from '../core/helpers';
+import { DBVersion } from '../core/helpers';
+import { addRecentPostsToDatabase } from '../core/counting';
 import { redis, type TaskResponse } from '@devvit/web/server';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -103,7 +105,8 @@ tasks.post('/background-task-handler', async (c) => {
     }
   }
   else if (currentTask == 'setup') {
-    if (await restoreDatabaseBackup(false)) {
+//    if (await restoreDatabaseBackup(false)) {
+    if (await addRecentPostsToDatabase()) {
       await redis.set(`current-background-task-v${await DBVersion()}`, 'flair');
       await redis.del(`background-task-tracker-v${await DBVersion()}`);
     }

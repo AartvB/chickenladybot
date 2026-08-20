@@ -7,7 +7,9 @@ export async function addPostToDatabase(postId: T3, postNumber: number, authorNa
   console.log(`${getDateTime()}: Adding post ${postId} with title ${postNumber} by user ${authorName} to the database`);
   const dbVersion = await DBVersion();
   const dateUTC = new Date(timestamp).toISOString().slice(0, 10);
-  await redis.set(`current-count-v${dbVersion}`, postNumber.toString());
+  const currentCount = await redis.get(`current-count-v${dbVersion}`);
+  if (currentCount == undefined) { return; }
+  await redis.set(`current-count-v${dbVersion}`, Math.max(postNumber, parseInt(currentCount)).toString());
   await redis.zAdd(`posts-v${dbVersion}`, {member: postId, score: timestamp });
   await redis.zAdd(`posts-of-${authorName}-v${dbVersion}`, { member: postId, score: timestamp });
   await redis.set(`post-info-${postId}-v${dbVersion}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString(), 'date': dateUTC }));
@@ -39,6 +41,20 @@ export async function addPostToDatabase(postId: T3, postNumber: number, authorNa
 
   if (await redis.zScore(`users-v${dbVersion}`, authorName) == undefined) { await addToEndOfQueue(`users-v${dbVersion}`, authorName); }
   await addToEndOfQueue(`streak-queue-v${dbVersion}`, postId);
+}
+
+export async function addRecentPostsToDatabase(nPosts: number = 1000): Promise<boolean> {
+  const subreddit = await reddit.getSubredditInfoById(context.subredditId);
+  if (subreddit.name == undefined) {
+    return false;
+  }
+  const recentPosts = await reddit.getNewPosts({ subredditName: subreddit.name, limit: nPosts });
+  for await (const post of recentPosts) {
+    if (/^\d+$/.test(post.title)) {
+      await addPostToDatabase(post.id as T3, parseInt(post.title), post.authorName, post.createdAt.getTime());
+    }
+  }
+  return true
 }
 
 async function removePost(postId: T3, commentText: string) {
@@ -113,7 +129,9 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
             const seconds = Math.floor((diff % (60 * 1000)) / 1000);
 
             const earlierPost = await reddit.getPostById(postDateTime[0] as T3);
-            commentText += `${days} days, ${hours} hours, ${minutes} minutes and ${seconds} seconds ago: [${earlierPost.title}](https://www.reddit.com/${earlierPost.permalink})\n\n`;            
+            commentText += `${days} days, ${hours} hours, ${minutes} minutes and ${seconds} seconds ago: [${earlierPost.title}](https://www.reddit.com/${earlierPost.permalink})`;
+            if (postDateTime[0] == postId) { commentText += " (this post)"; }
+            commentText += "\n\n";
           }
           await removePost(postId as T3, commentText);
         }
@@ -121,7 +139,6 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
       }
       else {
         const currentCountLink = `https://www.reddit.com/r/${context.subredditName}/comments/${await redis.get(`current-count-post-id-v${dbVersion}`)}/`;
-        if (currentCountLink == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
         const commentText = `This post has been removed because the correct next number was ${currentCount + 1}, but this post has '${postNumber}' as title. Please check the most recent number before posting. You can find the correct number in [this](${currentCountLink}) post.\n\nIt might be possible that someone else simply was slightly faster with their post.\n\nFeel free to post again with the correct new number.`;
 
         await removePost(postId as T3, commentText);

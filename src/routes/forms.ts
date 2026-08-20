@@ -168,6 +168,7 @@ forms.post('/view-streak-development', async (c) => {
   // TODO: Add local streaks to this output
   // TODO: Add deleted posts to this output, both within and after 10 minutes
   // TODO: Work on formatting of this output to make it more readable
+  // TODO: Add option to send it as a private message to the mod instead of displaying it in the form
 
   return c.json<UiResponse>({
     showForm: {
