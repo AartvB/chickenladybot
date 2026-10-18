@@ -33,6 +33,14 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
       }
     }
   }
+  const LocalDates: [string, number][] = [];
+  if (otherStreakSources != undefined) {
+    for (const streak of otherStreakSources) {
+      if (streak.source === 'local') {
+        LocalDates.push([dateFormatter.format(new Date(streak.timestamp)), streak.streak]);
+      }
+    }
+  }
 
   let streak = 0;
   let CoadStreak = 0;
@@ -51,7 +59,13 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
             CoadStreak = Math.max(CoadStreak, streakValue + streak);
           }
         }
-        streak++;
+        let normal_streak = streak;
+        for (const [date, streakValue] of LocalDates) {
+          if (date === postDate) {
+            streak = Math.max(streak, streakValue + streak);
+          }
+        }
+        if (streak === normal_streak) { streak++; }
         lastTimestamp = postTimestamp;
       }
       else { break; }
@@ -63,6 +77,11 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
       for (const [date, streakValue] of CoadDates) {
         if (date === previousDay) {
           CoadStreak = Math.max(CoadStreak, streakValue + streak);
+        }
+      }
+      for (const [date, streakValue] of LocalDates) {
+        if (date === previousDay) {
+          streak = Math.max(streak, streakValue + streak);
         }
       }
     }
