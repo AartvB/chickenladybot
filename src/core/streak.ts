@@ -43,6 +43,7 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
   }
 
   let streak = 0;
+  let editedStreak = 0;
   let CoadStreak = 0;
   let lastTimestamp: number|null = null;
   for (const postTimestamp of sortedTimestamps) {
@@ -59,13 +60,12 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
             CoadStreak = Math.max(CoadStreak, streakValue + streak);
           }
         }
-        let normal_streak = streak;
         for (const [date, streakValue] of LocalDates) {
           if (date === postDate) {
-            streak = Math.max(streak, streakValue + streak);
+            editedStreak = Math.max(editedStreak, streakValue + streak);
           }
         }
-        if (streak === normal_streak) { streak++; }
+        streak++;
         lastTimestamp = postTimestamp;
       }
       else { break; }
@@ -81,13 +81,13 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
       }
       for (const [date, streakValue] of LocalDates) {
         if (date === previousDay) {
-          streak = Math.max(streak, streakValue + streak);
+          editedStreak = Math.max(editedStreak, streakValue + streak - 1);
         }
       }
     }
   }
 
-  return {streak: streak, CoadStreak: CoadStreak};
+  return {streak: Math.max(streak, editedStreak), CoadStreak: CoadStreak};
 }
 
 async function calculateStreak(username: string, timestamp?: number): Promise<{ streak: number, CoadStreak: number}> {
@@ -189,6 +189,7 @@ export async function handleBackgroundStreak() {
   if (await taskScheduler.endTask()) { return false; }
   const dbVersion = await DBVersion();
 	let currentUserScore = parseInt(await redis.get(`background-task-tracker-v${dbVersion}`) ?? '0');
+  if (isNaN(currentUserScore)) { currentUserScore = 0; }
   const nUsers = await redis.zCard(`users-v${dbVersion}`);
   console.log(`${getDateTime()}: Starting streak background update from user score ${currentUserScore} out of ${nUsers} users`);
 	while (await taskScheduler.startNextTask()) {

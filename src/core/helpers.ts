@@ -288,7 +288,7 @@ export async function restoreDatabaseBackup(removeExistingData: boolean = true):
   else if (currentTask == 'remove-users') {
     console.log(`${getDateTime()}: Skipping removal of existing data from database.`);
     currentTask = 'users';
-    await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
+    await updateBackgroundTaskTracker(currentTask);
   }
 
   if (currentTask == 'users') {

@@ -125,12 +125,12 @@ forms.post('/add-manual-streak', async (c) => {
   const timestamp = targetPost.createdAt.getTime();
 
   while (true) {
-    const txn = await redis.watch(`other-streaks-of${authorName}-v${dbVersion}`);
+    const txn = await redis.watch(`other-streaks-of-${authorName}-v${dbVersion}`);
     await txn.multi();
-    const existingStreaks = await redis.get(`other-streaks-of${authorName}-v${dbVersion}`);
+    const existingStreaks = await redis.get(`other-streaks-of-${authorName}-v${dbVersion}`);
     const streakValues = existingStreaks ? JSON.parse(existingStreaks) : [];
     streakValues.push({ streak: streak, source: streakType, timestamp: timestamp });
-    await txn.set(`other-streaks-of${authorName}-v${dbVersion}`, JSON.stringify(streakValues));
+    await txn.set(`other-streaks-of-${authorName}-v${dbVersion}`, JSON.stringify(streakValues));
     if (await txn.exec()) { break; } // If the transaction was successful, break the loop. Otherwise, retry.
   }
 
