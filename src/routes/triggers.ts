@@ -11,7 +11,7 @@ triggers.post('/on-app-install', async (c) => {
   const input = await c.req.json<OnAppInstallRequest>();
   console.log('App installed to subreddit: r/' + input.subreddit?.name);
 
-  const dbVersion = '1';
+  const dbVersion = '2';
   await redis.set('database-version', dbVersion);
   await redis.set('new-post-handler-lock-v' + dbVersion, 'open');
   await redis.set('streak-handler-lock-v' + dbVersion, 'open');
@@ -25,8 +25,8 @@ triggers.post('/on-app-install', async (c) => {
   else if (input.subreddit?.name == 'chickenladybot_dev') { await redis.set('current-count-post-id-v' + dbVersion, '1vtbmkf'); }
   else {
     const post = await reddit.submitPost({subredditName: input.subreddit?.name as string, title: 'Use this to see what the next number is (automatically updated)', text: 'test', runAs: 'APP'});
-    post.approve();
-    post.sticky();
+    await post.approve();
+    await post.sticky();
     await redis.set('current-count-post-id-v' + dbVersion, post.id);
   }
 
