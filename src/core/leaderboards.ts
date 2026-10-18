@@ -15,6 +15,7 @@ async function updateCountLeaderboard() {
 	for (const postCount of postCounts) {
 		previousRank = postCount.score == previousCount ? previousRank : rowNumber;
 		previousCount = postCount.score;
+		if (previousCount <= 0) { break; }
 		rowNumber += 1;
 		wikiText += '|' + previousRank.toString() + '|' + postCount.member + '|' + previousCount.toString() + '|\n';
 	}
@@ -38,6 +39,7 @@ async function updateWholeCountsLeaderboards() {
 		for (const postCount of postCounts) {
 			previousRank = postCount.score == previousCount ? previousRank : rowNumber;
 			previousCount = postCount.score;
+			if (previousCount <= 0) { break; }
 			rowNumber += 1;
 			wikiText += '|' + previousRank.toString() + '|' + postCount.member + '|' + previousCount.toString() + '|\n';
 		}
@@ -100,6 +102,7 @@ async function updateMostCommentsLeaderboard() {
 	for (const [user, count] of Object.entries(topCommentsUsers)) {
 		previousRank = count == previousCount ? previousRank : rowNumber;
 		previousCount = count;
+		if (previousCount <= 0) { break; }
 		rowNumber += 1;
 		wikiText += '|' + previousRank.toString() + '|' + user + '|' + count.toString() + '|\n';
 	}
@@ -144,6 +147,7 @@ async function updateMostUpvotesLeaderboard() {
 		previousRank = count == previousCount ? previousRank : rowNumber;
 		previousCount = count;
 		rowNumber += 1;
+		if (previousCount <= 0) { break; }
 		wikiText += '|' + previousRank.toString() + '|' + user + '|' + count.toString() + '|\n';
 	}
 
@@ -166,6 +170,7 @@ async function updateIdenticalDigitsLeaderboard() {
 		previousRank = postCount.score == previousCount ? previousRank : rowNumber;
 		previousCount = postCount.score;
 		rowNumber += 1;
+		if (previousCount <= 0) { break; }
 		wikiText += '|' + previousRank.toString() + '|' + postCount.member + '|' + previousCount.toString() + '|\n';
 	}
 	wikiText += '\n##Most recent identical digits posts\n|Username|Count|Date (UTC)|\n|-:|:-|-:|\n';
@@ -204,6 +209,7 @@ async function updatePalindromeLeaderboard() {
 		previousRank = postCount.score == previousCount ? previousRank : rowNumber;
 		previousCount = postCount.score;
 		rowNumber += 1;
+		if (previousCount <= 0) { break; }
 		wikiText += '|' + previousRank.toString() + '|' + postCount.member + '|' + previousCount.toString() + '|\n';
 	}
 	wikiText += '\n##Most recent palindromic posts\n|Username|Count|Date (UTC)|\n|-:|:-|-:|\n';
@@ -247,7 +253,7 @@ async function updateStreakLeaderboard() {
 	for (const streak of currentStreaks) {
 		previousRank = streak.score == previousStreak ? previousRank : rowNumber;
 		previousStreak = streak.score;
-		if (previousStreak == 0) { break; }
+		if (previousStreak <= 0) { break; }
 		rowNumber += 1;
 		wikiText += '|' + previousRank.toString() + '|' + streak.member + '|' + previousStreak.toString() + '|\n';
 	}
@@ -259,7 +265,7 @@ async function updateStreakLeaderboard() {
 	for (const streak of topStreaks) {
 		previousRank = streak.score == previousStreak ? previousRank : rowNumber;
 		previousStreak = streak.score;
-		if (previousStreak == 0) { break; }
+		if (previousStreak <= 0) { break; }
 		rowNumber += 1;
 		wikiText += '|' + previousRank.toString() + '|' + streak.member + '|' + previousStreak.toString() + '|\n';
 	}
@@ -271,7 +277,7 @@ async function updateStreakLeaderboard() {
 	for (const streak of currentCOADStreaks) {
 		previousRank = streak.score == previousStreak ? previousRank : rowNumber;
 		previousStreak = streak.score;
-		if (previousStreak == 0) { break; }
+		if (previousStreak <= 0) { break; }
 		rowNumber += 1;
 		wikiText += '|' + previousRank.toString() + '|' + streak.member + '|' + previousStreak.toString() + '|\n';
 	}
@@ -282,7 +288,7 @@ async function updateStreakLeaderboard() {
 	for (const streak of topCOADStreaks) {
 		previousRank = streak.score == previousStreak ? previousRank : rowNumber;
 		previousStreak = streak.score;
-		if (previousStreak == 0) { break; }
+		if (previousStreak <= 0) { break; }
 		rowNumber += 1;
 		wikiText += '|' + previousRank.toString() + '|' + streak.member + '|' + previousStreak.toString() + '|\n';
 	}
