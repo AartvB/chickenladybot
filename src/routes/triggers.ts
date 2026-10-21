@@ -61,7 +61,8 @@ triggers.post('/on-post-delete', async (c) => {
     await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, {member: postId, score: Date.now()});
     let message = `This post has been removed by you or a moderator after 10 minutes of posting it. Therefore this post will still count as your post for this day and keeps contributing to your streak. You may post again at the next calendar day.` // TODO: Remove magic number 10
     message += await botExplainer();
-    await reddit.submitComment({id: postId as T3, text: message, runAs: 'APP'});
+    const comment = await reddit.submitComment({id: postId as T3, text: message, runAs: 'APP'});
+    await comment.distinguish(true);
   }
 
   return c.json<TriggerResponse>({status: 'success',}, 200);

@@ -66,7 +66,8 @@ async function removePost(postId: T3, commentText: string) {
   if (streak >= 4 && postInfo.createdAt.getTime() < Date.now() - 4 * 60000) { message += '\n\nTechnical issues caused the bot to remove this post much later than normal. We try our best to keep things running smoothly, but sometimes the system runs into issues. Note, this does not count as your post for the day, feel free to post again.\n\nIf this causes you to miss a day and your streak was reset due to the late removal, feel free to reach out to the mods [here](https://www.reddit.com/message/compose/?to=/r/countwithchickenlady) and we can reinstate it.'; }
   message += await botExplainer();
 
-  await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
+  const comment = await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
+  await comment.distinguish(true);
   await reddit.remove(postId, false);
 }
 

@@ -73,7 +73,8 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 
 		let message = `This post has been removed by you or a moderator within 10 minutes of posting, or it has been flagged for special deletion because you contacted us through mod mail. Therefore this post does not count as your post for this day and does not contribute to your streak. Feel free to post again.` // TODO: Remove magic number 10
 		message += await botExplainer();
-		await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
+		const comment = await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
+		await comment.distinguish(true);
 	}
 	else { await redis.del(`post-info-${postId}-v${dbVersion}`); }
 
