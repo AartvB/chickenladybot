@@ -24,6 +24,9 @@ The bot does the following things:
 - Update the leaderboards on the wiki, that show interesting statistics of users and posts.
 - If a user (or a moderator) removes a post within 10 minutes of it being posted, it is removed from the streak database. If it is removed after 10 minutes, it will not be removed from the streak database, so it will still be used when calculating the streak, and still counts for the 'post once per day' rule. This is done, because otherwise someone might lose their streak if their posts gets deleted after a few hours. However, due to privacy reasons, 21 days later it will be removed from the streak database anyways. Only the timestamp of the post is saved to be able to accurately calculate the user streak.
 - It stores information on all posts ever posted on this subreddit, unless the posts are deleted, in which case the data will be removed after 21 days.
+- 5 minutes after a post has been posted on the r/countwithchickenlady subreddit, the post is linked to in the discord server. The 5 minutes delay is to allow people to remove their posts without it automatically appearing in the discord server.
+- If a posts gets an NSFW tag within 21 days after posting, the contents of the posts are obscured in the discord channel, to avoid having NSFW content in the SFW section of the discord server.
+- Once per day, the bot checks all images in the daily-bot-post channel, and posts the image with the highest number of checkmarks to reddit using the ChickenBotOnceADay account. Ties are won by the earlier comment.
 
 ## Source
 The source code of the bot can be found here: https://github.com/AartvB/chickenladybot.

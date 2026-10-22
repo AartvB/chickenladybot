@@ -8,6 +8,7 @@ import { DBVersion } from '../core/helpers';
 import { addRecentPostsToDatabase } from '../core/counting';
 import { redis, type TaskResponse } from '@devvit/web/server';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
+import { handleDiscord, handleDiscordNSFWCheck } from '../core/discord';
 
 export const tasks = new Hono();
 
@@ -66,12 +67,30 @@ tasks.post('/deleted-post-handler', async (c) => {
   return c.json<TaskResponse>({ status: 'success', message: `Worked on deleted posts`, number: 200 });
 });
 
+tasks.post('/discord-handler', async (c) => {
+  // Handle the early deleted post queue
+  const lockKey = `discord-handler-lock-v${await DBVersion()}`;
+  const now = Date.now();
+  const lockStatus = await redis.get(lockKey);
+  if (lockStatus != 'open') {
+    const lockTime = parseInt(lockStatus || '0');
+    if (lockTime >= now - 35 * 1000) { // If the lock has been active for more than 35 seconds, release it and continue processing
+      return c.json<TaskResponse>({ status: 'locked' }, 200);
+    }
+  }
+  await redis.set(lockKey, now.toString());
+  await handleDiscord();
+  await redis.set(lockKey, 'open');
+  return c.json<TaskResponse>({ status: 'success', message: `Worked on discord link`, number: 200 });
+});
+
 tasks.post('/background-task-handler', async (c) => {
-  // Handles tasks that are not time-sensitive. It performs 4 tasks: 'setup', 'flair', 'leaderboard' and 'cleanup'.
+  // Handles tasks that are not time-sensitive. It performs 5 tasks: 'setup', 'flair', 'leaderboard', 'cleanup' and 'discord-nsfw-check'.
   // Setup: Setup the database for the first time, when the bot is installed.
   // Flair: Check flair of all users if it is still accurate. If a user has not posted for too long, their streak should be reset to 0.
   // Leaderboard: Update the leaderboard statistics and update the leaderboard.
   // Cleanup: Remove posts that have been deleted more than 21 days ago from the database, for privacy reasons.
+  // Discord NSFW check: Check if the posts that have been sent to discord within the last 21 days have been changed to NSFW, and if they were, change the discord message to reflect this. This is to prevent NSFW content from being sent to discord uncensored.
   // It takes many calls to finish a task, and when it finishes a task, it continues with the next task.
 
   const lockKey = `background-task-handler-lock-v${await DBVersion()}`;
@@ -100,6 +119,12 @@ tasks.post('/background-task-handler', async (c) => {
   }
   else if (currentTask == 'cleanup') {
     if (await handleCleanup()) {
+      await redis.set(`current-background-task-v${await DBVersion()}`, 'discord-nsfw-check');
+      await redis.del(`background-task-tracker-v${await DBVersion()}`);
+    }
+  }
+  else if (currentTask == 'discord-nsfw-check') {
+    if (await handleDiscordNSFWCheck()) {
       await redis.set(`current-background-task-v${await DBVersion()}`, 'flair');
       await redis.del(`background-task-tracker-v${await DBVersion()}`);
     }

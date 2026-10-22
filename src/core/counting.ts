@@ -12,7 +12,7 @@ export async function addPostToDatabase(postId: T3, postNumber: number, authorNa
   await redis.set(`current-count-v${dbVersion}`, Math.max(postNumber, parseInt(currentCount)).toString());
   await redis.zAdd(`posts-v${dbVersion}`, {member: postId, score: timestamp });
   await redis.zAdd(`posts-of-${authorName}-v${dbVersion}`, { member: postId, score: timestamp });
-  await redis.set(`post-info-${postId}-v${dbVersion}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString(), 'date': dateUTC }));
+  await redis.set(`post-info-${postId}-v${dbVersion}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString(), 'date': dateUTC, 'discordMessageId': null }));
   await redis.zAdd(`posts-per-user-v${dbVersion}`, { member: authorName, score: await redis.zCard(`posts-of-${authorName}-v${dbVersion}`) });
 
 	let nZeroes = 1;

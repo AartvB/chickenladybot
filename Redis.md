@@ -31,12 +31,17 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **streak-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single streak handler is active at the same time.
 - **deleted-post-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single deleted post handler is active at the same time.
 - **background-task-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single background task handler is active at the same time.
+- **discord-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single discord handler is active at the same time.
 - **shutdown-lock**: Either 'open', 'soft' or 'hard'. Shuts some or all of the bot functionality down.
-- **current-background-task**: Which background process is currently running. Either 'setup', 'flair', 'leaderboard' and 'cleanup'.
+- **current-background-task**: Which background process is currently running. Either 'setup', 'flair', 'leaderboard', 'cleanup' or 'discord-nsfw-check'.
 - **background-task-tracker**: Which part of the background task must be executed next.
 - **current-count**: The current count of the subreddit.
 - **current-count-post-id**: The id of the post that shows what the current count is.
 - **new-post-limit**: The number of posts to process at once when checking for new posts.
+- **latest-bot-post**: The id of the latest bot post from #daily-bot-post on discord.
+- **latest-bot-post-discord-message**: The id of the latest bot post that was pointed to by the bot in #daily-bot-post on discord.
+- **latest-bot-discord-message**: The id of the latest discord message of the bot in #daily-bot-post.
+- **latest-chosen-discord-message-id**: The id of the latest discord message that was chosen to be posted by the bot.
 
 ## Group of sorted sets
 - **posts-of-\[username\]**: Each of these sorted lists contains the post ids of this user. Score is the timestamp of posting.
@@ -44,5 +49,5 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **whole-count-\[number\]-users**: Each of these sorted lists contains the user ids of users that posted posts that end in 0, 00, 000, 0000 etc. The score is the number of posts they have in this format.
 
 ## Group of single values
-- **post-info-\[postId\]**: Each of these values contains a stringified JSON overview containing post info, namely 'authorName', 'postNumber', 'date' (UTC).
+- **post-info-\[postId\]**: Each of these values contains a stringified JSON overview containing post info, namely 'authorName', 'postNumber', 'date' (UTC), 'discordMessageId' and 'isNSFW'. These last two keys are optional.
 - **other-streaks-of-\[username\]**: Each of these values contains a stringified JSON overview containing a list of other streaks, namely 'streak', 'source', 'timestamp' (either 'COAD' or 'local'). Example: [{'streak': 5, 'source':'COAD', 'timestamp':12345},{'streak': 9, 'source':'local', 'timestamp':23456}].
