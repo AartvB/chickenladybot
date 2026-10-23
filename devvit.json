@@ -60,6 +60,55 @@
         "location": "post",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/view-streak-development"
+      },
+      {
+        "label": "Post as bot",
+        "description": "Make a post as the bot.",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/post-as-bot"
+      },
+      {
+        "label": "Edit bot post",
+        "description": "Edit a post made by the bot.",
+        "location": "post",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/edit-bot-post"
+      },
+      {
+        "label": "View bot post info",
+        "description": "View information about a post made by the bot.",
+        "location": "post",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/view-bot-post-info"
+      },
+      {
+        "label": "Comment as bot",
+        "description": "Make a comment as the bot.",
+        "location": "post",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/comment-as-bot"
+      },
+      {
+        "label": "Comment as bot",
+        "description": "Make a comment as the bot.",
+        "location": "comment",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/comment-as-bot"
+      },
+      {
+        "label": "Edit bot comment",
+        "description": "Edit a comment made by the bot.",
+        "location": "comment",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/edit-bot-comment"
+      },
+      {
+        "label": "View bot comment info",
+        "description": "View information about a comment made by the bot.",
+        "location": "comment",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/view-bot-comment-info"
       }
     ]
   },
@@ -71,7 +120,13 @@
     "removePostFromStreakDatabase": "/internal/form/remove-post-from-streak-database",
     "addManualStreak": "/internal/form/add-manual-streak",
     "viewStreakDevelopment": "/internal/form/view-streak-development",
-    "displayStreakDevelopment": "/internal/form/display-streak-development"
+    "displayStreakDevelopment": "/internal/form/display-streak-development",
+    "postAsBot": "/internal/form/post-as-bot",
+    "editBotPost": "/internal/form/edit-bot-post",
+    "viewBotPostInfo": "/internal/form/view-bot-post-info",
+    "commentAsBot": "/internal/form/comment-as-bot",
+    "editBotComment": "/internal/form/edit-bot-comment",
+    "viewBotCommentInfo": "/internal/form/view-bot-comment-info"
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",

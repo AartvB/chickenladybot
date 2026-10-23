@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import type { T3, UiResponse } from '@devvit/web/shared';
-import { isInHardShutdown, isInSoftShutdown } from '../core/helpers';
-import { reddit } from '@devvit/web/server';
+import type { T1, T3, UiResponse } from '@devvit/web/shared';
+import { DBVersion, isInHardShutdown, isInSoftShutdown } from '../core/helpers';
+import { reddit, redis } from '@devvit/web/server';
 
 export const menu = new Hono();
 
@@ -143,6 +143,385 @@ menu.post('/add-manual-streak', async (c) => {
         title: 'Add a manual streak',
         description: 'This form allows you to add a manual streak for a user. This is mainly useful for if a user moves from r/CountOnceADay to the current subreddit and you want to add their streak to the database. In that case put the post ID of their last post in r/CountOnceADay and the length of their streak.',
         acceptLabel: 'Add manual streak',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/post-as-bot', async (c) => {
+  // Allows a mod to make a post as the bot
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'postAsBot',
+      form: {
+        fields: [{
+          name: 'title',
+          label: 'Post Title',
+          type: 'string',
+          helpText: 'This is the title of the post you want to make as the bot.',
+          required: true
+        },
+        {
+          name: 'body',
+          label: 'Post Body',
+          type: 'paragraph',
+          helpText: 'This is the body of the post you want to make as the bot.',
+          required: true
+        },
+        {
+          name: 'showModLabel',
+          label: 'Show Mod Label',
+          type: 'boolean',
+          defaultValue: true,
+          helpText: 'If checked, the mod label appears on the post.'
+        },
+        {
+          name: 'stickyPost',
+          label: 'Sticky Post',
+          type: 'boolean',
+          defaultValue: false,
+          helpText: 'If checked, the post will be stickied to the top of the subreddit.'
+        },
+        {
+          name: 'lockPost',
+          label: 'Lock Post',
+          type: 'boolean',
+          defaultValue: false,
+          helpText: 'If checked, the post will be locked and no new comments can be made.'
+        },
+        {
+          name: 'footerChoice',
+          label: 'Post Footer',
+          type: 'select',
+          options: [
+            { label: 'Talk as mod team', value: 'mod' },
+            { label: 'Pretend to be the bot (mostly as a joke)', value: 'bot' },
+            { label: 'Custom: fill line below', value: 'custom' },
+          ],
+          defaultValue: ['mod'],
+          helpText: 'Choose how the post should be closed. If you choose "Custom", fill in the line below.'
+        },
+        {
+          name: 'customFooter',
+          label: 'Custom Footer',
+          type: 'string',
+          helpText: 'If you selected "Custom" in the previous field, fill in the footer line here. Otherwise leave this empty.',
+        }],
+        title: 'Make a post as the bot',
+        description: 'This form allows you to make a post as the bot. This is useful if you want to make an announcement. Note that moderators can always see who made the post.',
+        acceptLabel: 'Make post as bot',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/edit-bot-post', async (c) => {
+  // Allows a mod to edit a bot post
+  const values = await c.req.json<{targetId?: string}>();
+  const postId = values.targetId?.slice(3) ?? '';
+  const post = await reddit.getPostById(postId as T3);
+  if (post == undefined) { return c.json<UiResponse>({ showToast: 'Post not found',}, 200); }
+  if (post.authorName != 'chickenbotonceaday') { return c.json<UiResponse>({ showToast: 'This post was not made by the bot',}, 200); }
+  if (!(await redis.get(`bot-post-info-${post.id}-version-1-v${DBVersion()}`))) { return c.json<UiResponse>({ showToast: 'This post was not made by a moderator as the bot, so it cannot be edited.',}, 200); }
+
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'editBotPost',
+      form: {
+        fields: [
+        {
+          name: 'postId',
+          label: 'Post ID',
+          type: 'string',
+          defaultValue: postId,
+          helpText: 'This is the ID of the post you want to edit (the relevant ID is filled in automatically).',
+          required: true
+        },
+        {
+          name: 'body',
+          label: 'Post Body',
+          type: 'paragraph',
+          helpText: 'This is the body of the bot post you want to edit.',
+          required: true,
+          defaultValue: post.body
+        },
+        {
+          name: 'showModLabel',
+          label: 'Show Mod Label',
+          type: 'boolean',
+          defaultValue: post.distinguishedBy == 'moderator',
+          helpText: 'If checked, the mod label appears on the post.'
+        },
+        {
+          name: 'stickyPost',
+          label: 'Sticky Post',
+          type: 'boolean',
+          defaultValue: post.isStickied(),
+          helpText: 'If checked, the post will be stickied to the top of the subreddit.'
+        },
+        {
+          name: 'lockPost',
+          label: 'Lock Post',
+          type: 'boolean',
+          defaultValue: post.isLocked(),
+          helpText: 'If checked, the post will be locked and no comments can be made below it.'
+        }],
+        title: 'Edit this bot post',
+        description: 'This form allows you to edit a post that was made by a moderator as the bot. Note that moderators can always see who made and edited the post.',
+        acceptLabel: 'Edit bot post',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/view-bot-post-info', async (c) => {
+  // Allows a mod to view the info of a bot post
+  const values = await c.req.json<{targetId?: string}>();
+  const postId = values.targetId?.slice(3) ?? '';
+  const post = await reddit.getPostById(postId as T3);
+  if (post == undefined) { return c.json<UiResponse>({ showToast: 'Post not found',}, 200); }
+  if (post.authorName != 'chickenbotonceaday') { return c.json<UiResponse>({ showToast: 'This post was not made by the bot',}, 200); }
+  const postInfo = await redis.get(`bot-post-info-${post.id}-version-1-v${DBVersion()}`);
+  if (!postInfo) { return c.json<UiResponse>({ showToast: 'This post was created by the bot itself.',}, 200); }
+
+  let versions: {label: string, value: string}[] = [{ label: 'History summary', value: 'summary' }, { label: 'Full history', value: 'full' }];
+  let version = 1;
+  while (true) {
+    const info = await redis.get(`bot-post-info-${post.id}-version-${version}-v${DBVersion()}`);
+    if (info) {
+      versions.push({ label: `Version ${version}`, value: `${version}` });
+      version++;
+    }
+    else { break; }
+  }
+  if (versions.length == 0) { return c.json<UiResponse>({ showToast: 'No versions of this post were found.',}, 200); }
+
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'viewBotPostInfo',
+      form: {
+        fields: [
+        {
+          name: 'postId',
+          label: 'Post ID',
+          type: 'string',
+          defaultValue: postId,
+          helpText: 'This is the ID of the post you want to view info for (the relevant ID is filled in automatically).',
+          required: true
+        },
+        {
+          name: 'version',
+          label: 'Version',
+          type: 'select',
+          options: versions.map((v) => ({ label: v.label, value: v.value })),
+          defaultValue: ['summary'],
+          helpText: 'Select the version of the post info you want to view.'
+        }],
+        title: 'View bot post info',
+        description: 'View the version history of a bot post: which moderators made which changes at which point in time? It gets sent to you in a private message.',
+        acceptLabel: 'Send post info in a private message',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/comment-as-bot', async (c) => {
+  // Allows a mod to make a comment as the bot
+  const values = await c.req.json<{targetId?: string}>();
+  const isPost = values.targetId?.startsWith('t3_') ?? false;
+  const isComment = values.targetId?.startsWith('t1_') ?? false;
+  if (!isPost && !isComment) { return c.json<UiResponse>({ showToast: 'Invalid target ID. Please try again.',}, 200); }
+  let fields: any[] = [
+    {
+      name: 'targetId',
+      label: 'Response To (Post or Comment) ID',
+      type: 'string',
+      defaultValue: values.targetId,
+      helpText: 'This is the ID of the post or comment you want to respond to as the bot (the relevant ID is filled in automatically).',
+      required: true
+    },
+    {
+      name: 'body',
+      label: 'Comment Text',
+      type: 'paragraph',
+      helpText: 'This is the text of the comment you want to make as the bot.',
+      required: true
+    },
+    {
+      name: 'showModLabel',
+      label: 'Show Mod Label',
+      type: 'boolean',
+      defaultValue: true,
+      helpText: 'If checked, the mod label appears on the comment.'
+    }
+  ]
+  if (isPost) {
+    fields.push({
+      name: 'stickyComment',
+      label: 'Sticky Comment',
+      type: 'boolean',
+      defaultValue: false,
+      helpText: 'If checked, the comment will be stickied to the top of the post. Can only be done if the mod label is shown.'
+    })
+  }
+  fields.push({
+    name: 'lockComment',
+    label: 'Lock Comment',
+    type: 'boolean',
+    defaultValue: false,
+    helpText: 'If checked, the comment will be locked and no new comments can be made below it.'
+  },
+  {
+    name: 'footerChoice',
+    label: 'Comment Footer',
+    type: 'select',
+    options: [
+      { label: 'Talk as mod team', value: 'mod' },
+      { label: 'Pretend to be the bot (mostly as a joke)', value: 'bot' },
+      { label: 'Custom: fill line below', value: 'custom' },
+    ],
+    defaultValue: ['mod'],
+    helpText: 'Choose how the comment should be closed. If you choose "Custom", fill in the line below.'
+  },
+  {
+    name: 'customFooter',
+    label: 'Custom Footer',
+    type: 'string',
+    helpText: 'If you selected "Custom" in the previous field, fill in the footer line here. Otherwise leave this empty.',
+  });
+
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'commentAsBot',
+      form: {
+        fields: fields,
+        title: 'Make a comment as the bot',
+        description: 'This form allows you to make a comment as the bot. This is useful if you want to talk on behalf of the mod team instead of as yourself. Note that moderators can always see who made the comment.',
+        acceptLabel: 'Make comment as bot',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/edit-bot-comment', async (c) => {
+  // Allows a mod to edit a bot comment
+  const values = await c.req.json<{targetId?: string}>();
+  const postId = values.targetId?.slice(3) ?? '';
+  const comment = await reddit.getCommentById(postId as T1);
+  if (comment == undefined) { return c.json<UiResponse>({ showToast: 'Comment not found',}, 200); }
+  if (comment.authorName != 'chickenbotonceaday') { return c.json<UiResponse>({ showToast: 'This comment was not made by the bot',}, 200); }
+  if (!(await redis.get(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`))) { return c.json<UiResponse>({ showToast: 'This comment was not made by a moderator as the bot, so it cannot be edited.',}, 200); }
+
+  const commentOnPost = comment.parentId.startsWith('t3_');
+
+  let fields: any[] = [
+    {
+      name: 'commentId',
+      label: 'Comment ID',
+      type: 'string',
+      defaultValue: values.targetId,
+      helpText: 'This is the ID of the comment you want to edit (the relevant ID is filled in automatically).',
+      required: true
+    },
+    {
+      name: 'body',
+      label: 'Comment Text',
+      type: 'paragraph',
+      helpText: 'This is the text of the comment you want to edit.',
+      required: true,
+      defaultValue: comment.body
+    },
+    {
+      name: 'showModLabel',
+      label: 'Show Mod Label',
+      type: 'boolean',
+      defaultValue: comment.distinguishedBy == 'moderator',
+      helpText: 'If checked, the mod label appears on the comment.'
+    }
+  ]
+
+  if (commentOnPost) {
+    fields.push({
+      name: 'stickyComment',
+      label: 'Sticky Comment',
+      type: 'boolean',
+      defaultValue: comment.isStickied(),
+      helpText: 'If checked, the comment will be stickied to the top of the post. Can only be done if the mod label is shown.'
+    })
+  }
+  fields.push({
+    name: 'lockComment',
+    label: 'Lock Comment',
+    type: 'boolean',
+    defaultValue: comment.isLocked(),
+    helpText: 'If checked, the comment will be locked and no new comments can be made below it.'
+  });
+
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'editBotComment',
+      form: {
+        fields: fields,
+        title: 'Edit this bot comment',
+        description: 'This form allows you to edit a comment that was made by a moderator as the bot. Note that moderators can always see who made and edited the comment.',
+        acceptLabel: 'Edit bot comment',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/view-bot-comment-info', async (c) => {
+  // Allows a mod to view the info of a bot comment
+  const values = await c.req.json<{targetId?: string}>();
+  const commentId = values.targetId?.slice(3) ?? '';
+  const comment = await reddit.getCommentById(commentId as T1);
+  if (comment == undefined) { return c.json<UiResponse>({ showToast: 'Comment not found',}, 200); }
+  if (comment.authorName != 'chickenbotonceaday') { return c.json<UiResponse>({ showToast: 'This comment was not made by the bot',}, 200); }
+  const commentInfo = await redis.get(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`);
+  if (!commentInfo) { return c.json<UiResponse>({ showToast: 'This comment was created by the bot itself.',}, 200); }
+
+  let versions: {label: string, value: string}[] = [{ label: 'History summary', value: 'summary' }, { label: 'Full history', value: 'full' }];
+  let version = 1;
+  while (true) {
+    const info = await redis.get(`bot-comment-info-${comment.id}-version-${version}-v${DBVersion()}`);
+    if (info) {
+      versions.push({ label: `Version ${version}`, value: `${version}` });
+      version++;
+    }
+    else { break; }
+  }
+  if (versions.length == 0) { return c.json<UiResponse>({ showToast: 'No versions of this comment were found.',}, 200); }
+
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'viewBotCommentInfo',
+      form: {
+        fields: [
+        {
+          name: 'commentId',
+          label: 'Comment ID',
+          type: 'string',
+          defaultValue: commentId,
+          helpText: 'This is the ID of the comment you want to view info for (the relevant ID is filled in automatically).',
+          required: true
+        },
+        {
+          name: 'version',
+          label: 'Version',
+          type: 'select',
+          options: versions.map((v) => ({ label: v.label, value: v.value })),
+          defaultValue: ['summary'],
+          helpText: 'Select the version of the comment info you want to view.'
+        }],
+        title: 'View bot comment info',
+        description: 'View the version history of a bot comment: which moderators made which changes at which point in time? It gets sent to you in a private message.',
+        acceptLabel: 'Send comment info in a private message',
         cancelLabel: 'Cancel'
       },
     },

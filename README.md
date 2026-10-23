@@ -6,12 +6,21 @@ This code is shared to give people insight in how this bot works. You are free t
 ## Usage for moderators
 ### Subreddit usecases
 - Toggle shutdown: When the bot is having large problems, you can activate a shutdown. For most use-cases, a soft shutdown is enough. This will shut down all bot activity that removes posts. However, if the bot fully needs to stop, such as in the case of a database update, a hard shutdown can be activated.
+- Post as bot: A moderator can make a post using the bot account.
 
 ### Post usecases
 - Add post to streak database. If for some reason a post is not recorded in the streak database, the post can be manually added using this button.
 - Remove post from streak database. If you want to remove a post from the streak database, the post can be manually removed using this button.
 - Add manual streak. This button can be used to add a streak of a user which is carried over from r/CountOnceADay. The Post ID must be the Post ID of the post at r/CountOnceADay. This button can also be used to set the streak of a user for a r/countwithchickenlady post to a specific value. For example, if the bot didn't allow them to post for a day due to a mistake, their streak will be lost. The streak of the new post can be set to the correct value with this button.
 - View streak development. This button can be used to view the development of a users streak over time.
+- Edit bot post: If a moderator posted using the bot account, the post can be edited by a moderator.
+- View bot post info: Allows moderator to see which moderators created and edited the bot posts, and what edits they made.
+- Comment as bot: Allows moderators to comment to a post using the bot account.
+
+### Comment usecases
+- Edit bot comment: If a moderator commented using the bot account, the comment can be edited by a moderator.
+- View bot comment info: Allows moderator to see which moderators created and edited the bot comments, and what edits they made.
+- Comment as bot: Allows moderators to comment to a comment using the bot account.
 
 ## Functionalities
 The bot does the following things:

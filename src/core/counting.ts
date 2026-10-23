@@ -117,6 +117,8 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
           }
         }
 
+        if (post.authorName == 'chickenbotonceaday') { postedOnDifferentCalanderDays = true; } // Allow the bot to post multiple times per day
+
         if (!postedOnDifferentCalanderDays) {
           let commentText = "This post has been removed because of your latest two or three posts, at least two have been on the same calendar day. You may post only once per calendar day. Please wait until the next calendar day to post again.\nThe posts were as follows:\n\n";
           const now = Date.now();

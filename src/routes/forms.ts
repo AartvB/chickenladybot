@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import type { T3, UiResponse } from '@devvit/web/shared';
+import type { T1, T3, UiResponse } from '@devvit/web/shared';
 import { context, reddit, redis } from '@devvit/web/server';
-import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown, addToEndOfQueue, getDateTime } from '../core/helpers';
+import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown, addToEndOfQueue, getDateTime, botExplainer } from '../core/helpers';
 import { addPostToDatabase } from '../core/counting';
 import { removePostFromDatabase } from '../core/deletion';
 
@@ -139,6 +139,256 @@ forms.post('/add-manual-streak', async (c) => {
 
   console.log(`${getDateTime()}: Added a manual ${streakType} streak of length ${streak} for post ${postId} (author: ${authorName}, timestamp: ${timestamp}).`);
   return c.json<UiResponse>({ showToast: `Added a manual ${streakType} streak of length ${streak} for post ${postId}.` }, 200);
+});
+
+forms.post('/post-as-bot', async (c) => {
+  console.log(`${getDateTime()}: Received request to post as bot.`);
+  const values = await c.req.json<{title: string, body: string, showModLabel: boolean, stickyPost: boolean, lockPost: boolean, footerChoice: string, customFooter: string}>();
+  const title = values.title;
+  const text = values.body;
+  const showModLabel = values.showModLabel;
+  const stickyPost = values.stickyPost;
+  const lockPost = values.lockPost;
+  const footerChoice = values.footerChoice;
+  const customFooter = values.customFooter;
+  const username = await reddit.getCurrentUsername();
+  if (username == undefined) { return c.json<UiResponse>({ showToast: 'You must be logged in to post as the bot.', }, 200); }
+  if (title == undefined || text == undefined || showModLabel == undefined || stickyPost == undefined || lockPost == undefined || footerChoice == undefined) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
+  if (footerChoice == 'custom' && customFooter == undefined) { return c.json<UiResponse>({ showToast: 'Missing custom footer text. Please try again.',}, 200); }
+  if (footerChoice != 'custom' && customFooter != undefined) { return c.json<UiResponse>({ showToast: 'Custom footer text provided but footer choice is not set to custom. Please try again.',}, 200); }
+  let footerText: string;
+  if (footerChoice == 'custom') { footerText = `\n\n^(${customFooter})`; }
+  else if (footerChoice == 'bot') { footerText = await botExplainer(); }
+  else if (footerChoice == 'mod') { footerText = `\n\n^(This piece of content has been created manually by a moderator.)`; }
+  else { return c.json<UiResponse>({ showToast: 'Invalid footer choice. Please try again.',}, 200); }
+  try {
+    const post = await reddit.submitPost({subredditName: context.subredditName, title: title, text: text + footerText, runAs: 'APP'});
+    await post.approve();
+    if (showModLabel) { await post.distinguish(); }
+    if (stickyPost) { await post.sticky(); }
+    if (lockPost) { await post.lock(); }
+    const postingDateTimeUTC = post.createdAt.toISOString();
+    let postInfo = `Posted by u/${username} on ${postingDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyPost ? 'Stickied' : 'Not stickied'}. ${lockPost ? 'Locked' : 'Not locked'}.\n\nPost body:\n\n${text + footerText}`;
+    await redis.set(`bot-post-info-${post.id}-version-1-v${DBVersion()}`, postInfo);
+    console.log(`${getDateTime()}: u/${username} posted as bot: ${post.id}`);
+    return c.json<UiResponse>({ showToast: `You successfully posted as the bot!` }, 200);
+  } catch (error) {
+    console.error(`${getDateTime()}: Error posting as bot: ${error}`);
+    return c.json<UiResponse>({ showToast: `Error posting as bot: ${error}` }, 500);
+  }
+});
+
+forms.post('/edit-bot-post', async (c) => {
+  console.log(`${getDateTime()}: Received request to edit a bot post.`);
+  const values = await c.req.json<{postId: string, body: string, showModLabel: boolean, stickyPost: boolean, lockPost: boolean}>();
+  const postId = values.postId;
+  let post;
+  try { post = await reddit.getPostById(postId as T3); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
+  if (post.authorName != 'chickenbotonceaday') { return c.json<UiResponse>({ showToast: 'The provided post ID does not correspond to a post made by the bot. Please try again.',}, 200); }
+  if (!(await redis.get(`bot-post-info-${post.id}-version-1-v${DBVersion()}`))) { return c.json<UiResponse>({ showToast: 'This post was not made by a moderator as the bot, so it cannot be edited.',}, 200); }
+  const text = values.body;
+  const showModLabel = values.showModLabel;
+  const stickyPost = values.stickyPost;
+  const lockPost = values.lockPost;
+  const username = await reddit.getCurrentUsername();
+  if (username == undefined) { return c.json<UiResponse>({ showToast: 'You must be logged in to edit a bot post.', }, 200); }
+  if (text == undefined || showModLabel == undefined || stickyPost == undefined || lockPost == undefined) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
+  try {
+    await post.edit({text: text});
+    if (showModLabel) { await post.distinguish(); }
+    else { await post.undistinguish(); }
+    if (stickyPost) { await post.sticky(); }
+    else { await post.unsticky(); }
+    if (lockPost) { await post.lock(); }
+    else { await post.unlock(); }
+    const editDateTimeUTC = new Date().toISOString();
+    let postInfo = `Edited by u/${username} on ${editDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyPost ? 'Stickied' : 'Not stickied'}. ${lockPost ? 'Locked' : 'Not locked'}.\n\nPost body:\n\n${text}`;
+
+    let newVersion = 2;
+    while (true) {
+      let newPostInfo = await redis.get(`bot-post-info-${post.id}-version-${newVersion}-v${DBVersion()}`);
+      if (newPostInfo) { newVersion++; }
+      else { break; }
+    }
+    await redis.set(`bot-post-info-${post.id}-version-${newVersion}-v${DBVersion()}`, postInfo);
+    console.log(`${getDateTime()}: u/${username} edited bot post: ${post.id}`);
+    return c.json<UiResponse>({ showToast: `You successfully edited the bot post!` }, 200);
+  } catch (error) {
+    console.error(`${getDateTime()}: Error editing bot post: ${error}`);
+    return c.json<UiResponse>({ showToast: `Error editing bot post: ${error}` }, 500);
+  }
+});
+
+forms.post('/view-bot-post-info', async (c) => {
+  console.log(`${getDateTime()}: Received request to view bot post info.`);
+  const values = await c.req.json<{postId: string, version: string}>();
+  const postId = values.postId;
+  const username = await reddit.getCurrentUsername();
+  if (username == undefined) { return c.json<UiResponse>({ showToast: 'You must be logged in to view bot post info.', }, 200); }
+  let post;
+  try { post = await reddit.getPostById(postId as T3); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
+  if (post.authorName != 'chickenbotonceaday') { return c.json<UiResponse>({ showToast: 'The provided post ID does not correspond to a post made by the bot. Please try again.',}, 200); }
+  if (!(await redis.get(`bot-post-info-${post.id}-version-1-v${DBVersion()}`))) { return c.json<UiResponse>({ showToast: 'This post was not made by a moderator as the bot, so there is no information to view.',}, 200); }
+  const version = values.version;
+  console.log(`${getDateTime()}: u/${username} is viewing bot post info for post: ${post.id}, version: '${version}'`);
+  console.log(`${getDateTime()}: summary? ${version === 'summary'}. full? ${version === 'full'}. specific version? ${!isNaN(parseInt(version))}`);
+  let postInfo: string;
+  if (version == 'full' || version == 'summary') {
+    postInfo = `You are viewing the ${version=='full' ? 'full history' : 'history summary'} of [this](https://www.reddit.com/r/${context.subredditName}/comments/${post.id}) bot post:`;
+    let versionNumber = 1;
+    while (true) {
+      let newPostInfo = await redis.get(`bot-post-info-${post.id}-version-${versionNumber}-v${DBVersion()}`);
+      if (newPostInfo) {
+        postInfo += `\n\n# Version ${versionNumber}:`;
+        if (version == 'full') { postInfo += `\n\n${newPostInfo}`; }
+        else { postInfo += `\n\n${newPostInfo.split('\n\n')[0]}`; }
+      }
+      else { break; }
+      versionNumber++;
+    }
+  }
+  else {
+    const postInfoData = await redis.get(`bot-post-info-${post.id}-version-${version}-v${DBVersion()}`);
+    if (!postInfoData) { return c.json<UiResponse>({ showToast: 'The specified version of this bot post does not exist. Please try again.',}, 200); }
+    postInfo = `You are viewing version ${version} of [this](https://www.reddit.com/r/${context.subredditName}/comments/${post.id}) bot post:`;
+    postInfo += `\n\n${postInfoData}`;
+  }
+  reddit.sendPrivateMessage({to: username, subject: `Bot post info for post ${post.id.slice(3)}`, text: postInfo});
+  console.log(`${getDateTime()}: u/${username} viewed bot post info for post: ${post.id}`);
+  return c.json<UiResponse>({ showToast: `You successfully viewed the bot post info! It has been sent to your private messages.` }, 200);
+});
+
+forms.post('/comment-as-bot', async (c) => {
+  console.log(`${getDateTime()}: Received request to comment as bot.`);
+  const values = await c.req.json<{targetId: string, body: string, showModLabel: boolean, stickyComment?: boolean, lockComment: boolean, footerChoice: string, customFooter: string}>();
+  const targetId = values.targetId;
+  const text = values.body;
+  const showModLabel = values.showModLabel;
+  let stickyComment = values.stickyComment;
+  const lockComment = values.lockComment;
+  const footerChoice = values.footerChoice;
+  const customFooter = values.customFooter;
+  const username = await reddit.getCurrentUsername();
+  if (username == undefined) { return c.json<UiResponse>({ showToast: 'You must be logged in to post as the bot.', }, 200); }
+  if (targetId == undefined || text == undefined || showModLabel == undefined || lockComment == undefined || footerChoice == undefined) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
+  if (footerChoice == 'custom' && customFooter == undefined) { return c.json<UiResponse>({ showToast: 'Missing custom footer text. Please try again.',}, 200); }
+  if (footerChoice != 'custom' && customFooter != undefined) { return c.json<UiResponse>({ showToast: 'Custom footer text provided but footer choice is not set to custom. Please try again.',}, 200); }
+  let footerText: string;
+  if (footerChoice == 'custom') { footerText = `\n\n^(${customFooter})`; }
+  else if (footerChoice == 'bot') { footerText = await botExplainer(); }
+  else if (footerChoice == 'mod') { footerText = `\n\n^(This piece of content has been created manually by a moderator.)`; }
+  else { return c.json<UiResponse>({ showToast: 'Invalid footer choice. Please try again.',}, 200); }
+  const isPost = targetId.startsWith('t3_');
+  const isComment = targetId.startsWith('t1_');
+  if (!isPost && !isComment) { return c.json<UiResponse>({ showToast: 'Invalid target ID. Please try again.',}, 200); }
+  let target;
+  try { target = isPost ? await reddit.getPostById(targetId as T3) : await reddit.getCommentById(targetId as T1); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid target ID. Please try again.',}, 200); }
+  if (target.subredditName != context.subredditName) { return c.json<UiResponse>({ showToast: 'The target post or comment is not in the correct subreddit. Please try again.',}, 200); }
+  if (isComment && stickyComment) { return c.json<UiResponse>({ showToast: 'You cannot sticky a comment below another comment. Please try again.',}, 200); }
+  if (stickyComment && !showModLabel) { return c.json<UiResponse>({ showToast: 'You cannot sticky a comment without showing the mod label. Please try again.',}, 200); }
+  if (stickyComment === undefined) { stickyComment = false; }
+
+  try {
+    const comment = await reddit.submitComment({id: isPost ? targetId as T3 : targetId as T1, text: text + footerText, runAs: 'APP'});
+    if (showModLabel) { await comment.distinguish(stickyComment); }
+    if (lockComment) { await comment.lock(); }
+    const commentDateTimeUTC = comment.createdAt.toISOString();
+    let commentInfo = `Commented by u/${username} on ${commentDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyComment ? 'Stickied' : 'Not stickied'}. ${lockComment ? 'Locked' : 'Not locked'}.\n\nComment body:\n\n${text + footerText}`;
+    await redis.set(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`, commentInfo);
+    console.log(`${getDateTime()}: u/${username} commented as bot: ${comment.id}`);
+    return c.json<UiResponse>({ showToast: `You successfully commented as the bot!` }, 200);
+  } catch (error) {
+    console.error(`${getDateTime()}: Error commenting as bot: ${error}`);
+    return c.json<UiResponse>({ showToast: `Error commenting as bot: ${error}` }, 500);
+  }
+});
+
+forms.post('/edit-bot-comment', async (c) => {
+  console.log(`${getDateTime()}: Received request to edit a bot comment.`);
+  const values = await c.req.json<{commentId: string, body: string, showModLabel: boolean, stickyComment?: boolean, lockComment: boolean}>();
+  const commentId = values.commentId;
+  let comment;
+  try { comment = await reddit.getCommentById(commentId as T1); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid comment ID provided. Please try again.',}, 200); }
+  if (comment.authorName != 'chickenbotonceaday') { return c.json<UiResponse>({ showToast: 'The provided comment ID does not correspond to a comment made by the bot. Please try again.',}, 200); }
+  if (!(await redis.get(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`))) { return c.json<UiResponse>({ showToast: 'This comment was not made by a moderator as the bot, so it cannot be edited.',}, 200); }
+  const text = values.body;
+  const showModLabel = values.showModLabel;
+  let stickyComment = values.stickyComment;
+  const lockComment = values.lockComment;
+  const username = await reddit.getCurrentUsername();
+  if (username == undefined) { return c.json<UiResponse>({ showToast: 'You must be logged in to edit a bot comment.', }, 200); }
+  if (text == undefined || showModLabel == undefined || lockComment == undefined) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
+  const commentOnPost = comment.parentId.startsWith('t3_');
+  if (!commentOnPost && stickyComment) { return c.json<UiResponse>({ showToast: 'You cannot sticky a comment below another comment. Please try again.',}, 200); }
+  if (stickyComment && !showModLabel) { return c.json<UiResponse>({ showToast: 'You cannot sticky a comment without showing the mod label. Please try again.',}, 200); }
+  if (stickyComment === undefined) { stickyComment = false; }
+
+  try {
+    await comment.edit({text: text});
+    if (showModLabel) { await comment.distinguish(stickyComment); }
+    else { await comment.undistinguish(); }
+    if (lockComment) { await comment.lock(); }
+    else { await comment.unlock(); }
+    const editDateTimeUTC = new Date().toISOString();
+    let commentInfo = `Edited by u/${username} on ${editDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyComment ? 'Stickied' : 'Not stickied'}. ${lockComment ? 'Locked' : 'Not locked'}.\n\nComment body:\n\n${text}`;
+
+    let newVersion = 2;
+    while (true) {
+      let newCommentInfo = await redis.get(`bot-comment-info-${comment.id}-version-${newVersion}-v${DBVersion()}`);
+      if (newCommentInfo) { newVersion++; }
+      else { break; }
+    }
+    await redis.set(`bot-comment-info-${comment.id}-version-${newVersion}-v${DBVersion()}`, commentInfo);
+    console.log(`${getDateTime()}: u/${username} edited bot comment: ${comment.id}`);
+    return c.json<UiResponse>({ showToast: `You successfully edited the bot comment!` }, 200);
+  } catch (error) {
+    console.error(`${getDateTime()}: Error editing bot comment: ${error}`);
+    return c.json<UiResponse>({ showToast: `Error editing bot comment: ${error}` }, 500);
+  }
+});
+
+forms.post('/view-bot-comment-info', async (c) => {
+  console.log(`${getDateTime()}: Received request to view bot comment info.`);
+  const values = await c.req.json<{commentId: string, version: string}>();
+  const commentId = values.commentId;
+  const username = await reddit.getCurrentUsername();
+  if (username == undefined) { return c.json<UiResponse>({ showToast: 'You must be logged in to view bot comment info.', }, 200); }
+  let comment;
+  try { comment = await reddit.getCommentById(commentId as T1); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid comment ID provided. Please try again.',}, 200); }
+  if (comment.authorName != 'chickenbotonceaday') { return c.json<UiResponse>({ showToast: 'The provided comment ID does not correspond to a comment made by the bot. Please try again.',}, 200); }
+  if (!(await redis.get(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`))) { return c.json<UiResponse>({ showToast: 'This comment was not made by a moderator as the bot, so there is no information to view.',}, 200); }
+  const version = values.version;
+  console.log(`${getDateTime()}: u/${username} is viewing bot comment info for comment: ${comment.id}, version: '${version}'`);
+  console.log(`${getDateTime()}: summary? ${version === 'summary'}. full? ${version === 'full'}. specific version? ${!isNaN(parseInt(version))}`);
+  let commentInfo: string;
+  if (version == 'full' || version == 'summary') {
+    commentInfo = `You are viewing the ${version=='full' ? 'full history' : 'history summary'} of [this](https://www.reddit.com${comment.permalink}) bot comment:`;
+    let versionNumber = 1;
+    while (true) {
+      let newCommentInfo = await redis.get(`bot-comment-info-${comment.id}-version-${versionNumber}-v${DBVersion()}`);
+      if (newCommentInfo) {
+        commentInfo += `\n\n# Version ${versionNumber}:`;
+        if (version == 'full') { commentInfo += `\n\n${newCommentInfo}`; }
+        else { commentInfo += `\n\n${newCommentInfo.split('\n\n')[0]}`; }
+      }
+      else { break; }
+      versionNumber++;
+    }
+  }
+  else {
+    const commentInfoData = await redis.get(`bot-comment-info-${comment.id}-version-${version}-v${DBVersion()}`);
+    if (!commentInfoData) { return c.json<UiResponse>({ showToast: 'The specified version of this bot comment does not exist. Please try again.',}, 200); }
+    commentInfo = `You are viewing version ${version} of [this](https://www.reddit.com${comment.permalink}) bot comment:`;
+    commentInfo += `\n\n${commentInfoData}`;
+  }
+  reddit.sendPrivateMessage({to: username, subject: `Bot comment info for comment ${comment.id.slice(3)}`, text: commentInfo});
+  console.log(`${getDateTime()}: u/${username} viewed bot comment info for comment: ${comment.id}`);
+  return c.json<UiResponse>({ showToast: `You successfully viewed the bot comment info! It has been sent to your private messages.` }, 200);
 });
 
 forms.post('/view-streak-development', async (c) => {  

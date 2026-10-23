@@ -51,3 +51,5 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 ## Group of single values
 - **post-info-\[postId\]**: Each of these values contains a stringified JSON overview containing post info, namely 'authorName', 'postNumber', 'date' (UTC), 'discordMessageId' and 'isNSFW'. These last two keys are optional.
 - **other-streaks-of-\[username\]**: Each of these values contains a stringified JSON overview containing a list of other streaks, namely 'streak', 'source', 'timestamp' (either 'COAD' or 'local'). Example: [{'streak': 5, 'source':'COAD', 'timestamp':12345},{'streak': 9, 'source':'local', 'timestamp':23456}].
+- **bot-post-info-\[postId\]-version-\[versionNumber\]**: Each of these values contains a string with information about that version of the post.
+- **bot-comment-info-\[commentId\]-version-\[versionNumber\]**: Each of these values contains a string with information about that version of the comment.
