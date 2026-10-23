@@ -528,6 +528,44 @@ menu.post('/view-bot-comment-info', async (c) => {
   }, 200);
 });
 
+menu.post('/change-settings', async (c) => {
+  // Allows a mod to change the settings of the bot
+  const subreddit = await reddit.getCurrentSubreddit();
+  let removalReasons = await subreddit.getRemovalReasons();
+  removalReasons.push({ id: 'none', title: 'None', message: 'None' });
+  let defaultMultiplePostsPerDayReasonId = await redis.get(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`) ?? 'none';
+  if (!removalReasons.some((reason) => reason.id == defaultMultiplePostsPerDayReasonId)) { defaultMultiplePostsPerDayReasonId = 'none'; }
+  let defaultWrongTitleReasonId = await redis.get(`wrong-title-removal-reason-id-v${await DBVersion()}`) ?? 'none';
+  if (!removalReasons.some((reason) => reason.id == defaultWrongTitleReasonId)) { defaultWrongTitleReasonId = 'none'; }
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'changeSettings',
+      form: {
+        fields: [{
+          name: 'multiplePostsPerDayReasonId',
+          label: 'Removal reason for multiple posts per day',
+          type: 'select',
+          options: removalReasons.map((reason) => ({ label: reason.title, value: reason.id })),
+          helpText: 'Select the removal reason that will be used when a user posts multiple times in a day.',
+          defaultValue: [defaultMultiplePostsPerDayReasonId]
+        },
+        {
+          name: 'wrongTitleReasonId',
+          label: 'Removal reason for wrong title',
+          type: 'select',
+          options: removalReasons.map((reason) => ({ label: reason.title, value: reason.id })),
+          helpText: 'Select the removal reason that will be used when a user posts with the wrong title.',
+          defaultValue: [defaultWrongTitleReasonId]
+        }],
+        title: 'Change settings',
+        description: 'Change some settings of the bot for this subreddit.',
+        acceptLabel: 'Change settings',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
 menu.post('/view-streak-development', async (c) => {
   // Allows a mod to view the latest post of a user, and how their streak developed over these posts
   const values = await c.req.json<{targetId?: string}>();

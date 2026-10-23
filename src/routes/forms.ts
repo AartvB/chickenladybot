@@ -391,6 +391,29 @@ forms.post('/view-bot-comment-info', async (c) => {
   return c.json<UiResponse>({ showToast: `You successfully viewed the bot comment info! It has been sent to your private messages.` }, 200);
 });
 
+forms.post('/change-settings', async (c) => {
+  console.log(`${getDateTime()}: Received request to change settings.`);
+  const values = await c.req.json<{multiplePostsPerDayReasonId: string, wrongTitleReasonId: string}>();
+  const multiplePostsPerDayReasonId = Array.isArray(values.multiplePostsPerDayReasonId) ? values.multiplePostsPerDayReasonId[0] : values.multiplePostsPerDayReasonId;
+  const wrongTitleReasonId = Array.isArray(values.wrongTitleReasonId) ? values.wrongTitleReasonId[0] : values.wrongTitleReasonId;
+  const subreddit = await reddit.getCurrentSubreddit();
+  let removalReasons = await subreddit.getRemovalReasons();
+  removalReasons.push({ id: 'none', title: 'None', message: 'None' });
+
+  if (!removalReasons.some(reason => reason.id == multiplePostsPerDayReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for multiple posts per day. Please try again.',}, 200); }
+  if (!removalReasons.some(reason => reason.id == wrongTitleReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for wrong title. Please try again.',}, 200); }
+
+  if (multiplePostsPerDayReasonId == 'none') { await redis.del(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`); }
+  else { await redis.set(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`, multiplePostsPerDayReasonId); }  
+  if (wrongTitleReasonId == 'none') { await redis.del(`wrong-title-removal-reason-id-v${await DBVersion()}`); }
+  else { await redis.set(`wrong-title-removal-reason-id-v${await DBVersion()}`, wrongTitleReasonId); }
+
+  if (multiplePostsPerDayReasonId != 'none' && wrongTitleReasonId != 'none') { await redis.del(`last-notification-missing-removal-reasons-v${await DBVersion()}`); }
+
+  console.log(`${getDateTime()}: Settings updated: multiplePostsPerDayReasonId=${multiplePostsPerDayReasonId}, wrongTitleReasonId=${wrongTitleReasonId}`);
+  return c.json<UiResponse>({ showToast: 'Settings updated successfully.' }, 200);
+});
+
 forms.post('/view-streak-development', async (c) => {  
   console.log(`${getDateTime()}: Received request to view streak development.`);
   const dbVersion = await DBVersion();

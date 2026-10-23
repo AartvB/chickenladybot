@@ -42,6 +42,9 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **latest-bot-post-discord-message**: The id of the latest bot post that was pointed to by the bot in #daily-bot-post on discord.
 - **latest-bot-discord-message**: The id of the latest discord message of the bot in #daily-bot-post.
 - **latest-chosen-discord-message-id**: The id of the latest discord message that was chosen to be posted by the bot.
+- **multiple-posts-per-day-removal-reason-id**: The id of the removal reason for posting more than once per day.
+- **wrong-title-removal-reason-id**: The id of the removal reason for posting with the wrong title.
+- **last-notification-time-missing-removal-reasons**: The timestamp of the last notification for missing one or more removal reasons.
 
 ## Group of sorted sets
 - **posts-of-\[username\]**: Each of these sorted lists contains the post ids of this user. Score is the timestamp of posting.

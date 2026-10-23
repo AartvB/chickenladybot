@@ -7,6 +7,7 @@ This code is shared to give people insight in how this bot works. You are free t
 ### Subreddit usecases
 - Toggle shutdown: When the bot is having large problems, you can activate a shutdown. For most use-cases, a soft shutdown is enough. This will shut down all bot activity that removes posts. However, if the bot fully needs to stop, such as in the case of a database update, a hard shutdown can be activated.
 - Post as bot: A moderator can make a post using the bot account.
+- Change settings: A moderator can edit bot settings.
 
 ### Post usecases
 - Add post to streak database. If for some reason a post is not recorded in the streak database, the post can be manually added using this button.

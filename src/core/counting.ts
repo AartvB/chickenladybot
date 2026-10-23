@@ -1,5 +1,5 @@
 import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown } from './helpers';
-import { context, reddit } from '@devvit/web/server';
+import { context, reddit, settings } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
 
@@ -57,7 +57,7 @@ export async function addRecentPostsToDatabase(nPosts: number = 1000): Promise<b
   return true
 }
 
-async function removePost(postId: T3, commentText: string) {
+async function removePost(postId: T3, commentText: string, reason?: string) {
   console.log(`${getDateTime()}: Removing post ${postId}`);
   const postInfo = await reddit.getPostById(postId);
   let message = commentText;
@@ -69,6 +69,30 @@ async function removePost(postId: T3, commentText: string) {
   const comment = await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
   await comment.distinguish(true);
   await reddit.remove(postId, false);
+
+  if (reason) {
+    if (reason == 'title' || reason == 'days') {
+      let removalReasonId = undefined;
+      if (reason == 'title') { removalReasonId = await redis.get(`wrong-title-removal-reason-id-v${await DBVersion()}`); }
+      else if (reason == 'days') { removalReasonId = await redis.get(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`); }
+      if (removalReasonId == undefined) {
+        const daysBetweenRemovalReasonReminders = await settings.get('daysBetweenRemovalReasonReminders');
+        if (typeof daysBetweenRemovalReasonReminders == 'number') {
+          const lastRemovalReasonReminderTime = await redis.get(`last-notification-time-missing-removal-reasons-v${await DBVersion()}`);
+          if (lastRemovalReasonReminderTime == undefined || Date.now() - parseInt(lastRemovalReasonReminderTime) > daysBetweenRemovalReasonReminders * 24 * 60 * 60 * 1000) {
+            await reddit.modMail.createConversation({body: `The bot has removed a post but was unable to add a removal reason. Consider adding removal reasons to the bot settings. This can be done by going to the bot settings in the subreddit menu and selecting the appropriate removal reasons.`, subject: 'Missing removal reason', subredditName: context.subredditName});
+            await redis.set(`last-notification-time-missing-removal-reasons-v${await DBVersion()}`, Date.now().toString());
+            console.log(`${getDateTime()}: Sent modmail notification about missing removal reasons.`);
+          }
+        }
+      }
+      else {
+        const post = await reddit.getPostById(postId);
+        const modNote = reason == 'title' ? 'Post removed by bot because it had the wrong title.' : 'Post removed by bot because the user posted multiple times per day.';
+        await post.addRemovalNote({reasonId: removalReasonId, modNote: modNote});
+      }
+    }
+  }
 }
 
 export async function handleNewPosts(): Promise<{ status: string; message: string; number: number }> {
@@ -136,7 +160,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
             if (postDateTime[0] == postId) { commentText += " (this post)"; }
             commentText += "\n\n";
           }
-          await removePost(postId as T3, commentText);
+          await removePost(postId as T3, commentText, 'days');
         }
         else { await addPostToDatabase(postId as T3, postNumber, post.authorName, post.createdAt.getTime()); }
       }
@@ -144,7 +168,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
         const currentCountLink = `https://www.reddit.com/r/${context.subredditName}/comments/${await redis.get(`current-count-post-id-v${dbVersion}`)}/`;
         const commentText = `This post has been removed because the correct next number was ${currentCount + 1}, but this post has '${postNumber}' as title. Please check the most recent number before posting. You can find the correct number in [this](${currentCountLink}) post.\n\nIt might be possible that someone else simply was slightly faster with their post.\n\nFeel free to post again with the correct new number.`;
 
-        await removePost(postId as T3, commentText);
+        await removePost(postId as T3, commentText, 'title');
       }
     }
     else if (!post.approved) {
@@ -153,7 +177,7 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
       if (currentCountLink == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
       const commentText = `This post has been removed because the title must be a number. Please only post the next number in sequence. You can find the correct number in [this](${currentCountLink}) post.`;
 
-      await removePost(postId as T3, commentText);
+      await removePost(postId as T3, commentText, 'title');
     }
     // Otherwise a valid post detected, but not added to the database since it's not a number
 
