@@ -3,7 +3,7 @@ import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime } from './hel
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
-async function calculateStreakForTimezone(earlierTimestamps: number[], otherStreakSources: undefined | {streak: number, source: string, timestamp: number}[], timestamp: number, timeZone: string): Promise<{ streak: number, CoadStreak: number}> {
+async function calculateStreakForTimezone(earlierTimestamps: number[], otherStreakSources: undefined | {streak: number, source: string, timestamp: number}[], timestamp: number, timeZone: string): Promise<{ streak: number, CoadStreak: number, minTimestampNextPost: number | undefined, maxTimestampNextPost: number | undefined }> {
   // TODO: Stop loop if it is clear that it won't get better. For example, the last post was more than 48 hours ago.
 
   // Sort timestamps from latest to earliest
@@ -20,6 +20,37 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
     const mm = String(dateUtc.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(dateUtc.getUTCDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
+  }
+  const getNextDate = (date: string): string => {
+    const [year, month, day] = date.split("-").map(Number);
+    if (year == undefined || month == undefined || day == undefined) { throw new Error(`Invalid date format: ${date}`);}
+    const dateUtc = new Date(Date.UTC(year, month - 1, day + 1, 12));
+    const yyyy = dateUtc.getUTCFullYear();
+    const mm = String(dateUtc.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dateUtc.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  const getTimestamp = (date: string, hour: number, minute: number, second: number): number | undefined => {
+    const [year, month, day] = date.split("-").map(Number);
+    if (year == undefined || month == undefined || day == undefined) { throw new Error(`Invalid date format: ${date}`);}
+    const target = Date.UTC(year, month - 1, day, hour, minute, second);
+    let timestamp = target;
+
+    const formatter = new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'});
+
+    for (let i = 0; i < 10; i++) {
+      const parts = formatter.formatToParts(new Date(timestamp));
+      const values: Record<string, number> = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, Number(p.value)]));
+      if (values.year == undefined || values.month == undefined || values.day == undefined || values.hour == undefined || values.minute == undefined || values.second == undefined) { return undefined; }
+      const representedAsUTC = Date.UTC(values.year, values.month - 1, values.day, values.hour, values.minute, values.second);
+
+      const offset = representedAsUTC - timestamp;
+      const next = target - offset;
+
+      if (next === timestamp) {return timestamp; }
+      timestamp = next;
+    }
+    return undefined;
   }
 
   const today = getDate(timestamp);
@@ -47,11 +78,16 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
   let editedStreak = 0;
   let CoadStreak = 0;
   let lastTimestamp: number|null = null;
+  let minTimestampNextPost: number | undefined = undefined;
+  let maxTimestampNextPost: number | undefined = undefined;
   for (const postTimestamp of sortedTimestamps) {
     const postDate = dateFormatter.format(postTimestamp);
     if (lastTimestamp == null && (postDate == today || postDate == yesterday)) { // This was the first post, and it was today or yesterday
       streak = 1;
       lastTimestamp = postTimestamp;
+      const nextDay = getNextDate(postDate);
+      minTimestampNextPost = getTimestamp(nextDay, 0, 0, 0);
+      maxTimestampNextPost = getTimestamp(nextDay, 23, 59, 59);
     }
     else if (lastTimestamp != null) { // This was not the first post
       const previousDay = getPreviousDate(getDate(lastTimestamp));
@@ -88,10 +124,10 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
     }
   }
 
-  return {streak: Math.max(streak, editedStreak), CoadStreak: CoadStreak};
+  return {streak: Math.max(streak, editedStreak), CoadStreak: CoadStreak, minTimestampNextPost: minTimestampNextPost, maxTimestampNextPost: maxTimestampNextPost};
 }
 
-async function calculateStreak(username: string, timestamp?: number): Promise<{ streak: number, CoadStreak: number}> {
+async function calculateStreak(username: string, timestamp?: number): Promise<{ streak: number, CoadStreak: number, minTimestampNextPost: number | undefined, maxTimestampNextPost: number | undefined }> {
   // Note that the streak is not recorded in the database!
   const dbVersion = await DBVersion();
   if (timestamp == undefined) { timestamp = Date.now(); }
@@ -112,12 +148,24 @@ async function calculateStreak(username: string, timestamp?: number): Promise<{ 
 
   let maxStreak = 0;
   let maxCoadStreak = 0;
+  let minTimestampNextPost: number | undefined = Infinity;
+  let maxTimestampNextPost: number | undefined = -Infinity;
   for (const timeZone of Intl.supportedValuesOf('timeZone')) { // TODO: Stop when the max streak is found (nPosts + local streak == streak) and (nPosts + COAD streak == COAD streak)
-    const { streak, CoadStreak } = await calculateStreakForTimezone(earlierTimestamps, otherStreakSources, timestamp, timeZone);
+    const { streak, CoadStreak, minTimestampNextPost: minTimestamp, maxTimestampNextPost: maxTimestamp } = await calculateStreakForTimezone(earlierTimestamps, otherStreakSources, timestamp, timeZone);
+    if (minTimestamp == undefined || maxTimestamp == undefined) { minTimestampNextPost = undefined; maxTimestampNextPost = undefined; }
+    else if (minTimestampNextPost != undefined && maxTimestampNextPost != undefined) {
+      if (streak > maxStreak) { minTimestampNextPost = minTimestamp; maxTimestampNextPost = maxTimestamp; }
+      else if (streak == maxStreak && streak > 0) {
+        minTimestampNextPost = Math.min(minTimestampNextPost, minTimestamp);
+        maxTimestampNextPost = Math.max(maxTimestampNextPost, maxTimestamp);
+      }
+    }
     maxStreak = Math.max(maxStreak, streak);
     maxCoadStreak = Math.max(maxCoadStreak, CoadStreak);
   }
-  return { streak: maxStreak, CoadStreak: maxCoadStreak };
+  if (minTimestampNextPost == Infinity) { minTimestampNextPost = undefined; }
+  if (maxTimestampNextPost == -Infinity) { maxTimestampNextPost = undefined; }
+  return { streak: maxStreak, CoadStreak: maxCoadStreak, minTimestampNextPost: minTimestampNextPost, maxTimestampNextPost: maxTimestampNextPost };
 }
 
 async function getTextFromFlair(text: string): Promise<string> {
@@ -171,6 +219,14 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 
 		await redis.zAdd(`current-streaks-v${dbVersion}`, { member: username, score: streak.streak });
 		await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, { member: username, score: streak.CoadStreak });
+    if (streak.minTimestampNextPost != undefined && streak.maxTimestampNextPost != undefined) {
+      await redis.zAdd(`start-next-post-timeframe-v${dbVersion}`, { member: username, score: streak.minTimestampNextPost });
+      await redis.zAdd(`end-next-post-timeframe-v${dbVersion}`, { member: username, score: streak.maxTimestampNextPost });
+    }
+    else {
+      await redis.zRem(`start-next-post-timeframe-v${dbVersion}`, [username]);
+      await redis.zRem(`end-next-post-timeframe-v${dbVersion}`, [username]);
+    }
 		await updateUserFlair(username, Math.max(streak.streak, streak.CoadStreak));
 
 		if (await isPostDeletedEarly(postId as T3)) { await redis.zRem(`streak-queue-v${dbVersion}`, [postId]); }
@@ -203,6 +259,14 @@ export async function handleBackgroundStreak() {
 
 		await redis.zAdd(`current-streaks-v${dbVersion}`, { member: currentUser.member, score: streaks.streak });
 		await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, { member: currentUser.member, score: streaks.CoadStreak });
+    if (streaks.minTimestampNextPost != undefined && streaks.maxTimestampNextPost != undefined) {
+      await redis.zAdd(`start-next-post-timeframe-v${dbVersion}`, { member: currentUser.member, score: streaks.minTimestampNextPost });
+      await redis.zAdd(`end-next-post-timeframe-v${dbVersion}`, { member: currentUser.member, score: streaks.maxTimestampNextPost });
+    }
+    else {
+      await redis.zRem(`start-next-post-timeframe-v${dbVersion}`, [currentUser.member]);
+      await redis.zRem(`end-next-post-timeframe-v${dbVersion}`, [currentUser.member]);
+    }
 		await updateUserFlair(currentUser.member, Math.max(streaks.streak, streaks.CoadStreak));
 
 		currentUserScore = currentUser.score + 1;

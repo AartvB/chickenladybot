@@ -114,6 +114,13 @@
         "endpoint": "/internal/menu/view-bot-comment-info"
       },
       {
+        "label": "View post window",
+        "description": "See when you can next post to maintain your streak.",
+        "location": "subreddit",
+        "forUserType": "user",
+        "endpoint": "/internal/menu/view-post-window"
+      },
+      {
         "label": "Change settings",
         "description": "Change certain settings of the bot.",
         "location": "subreddit",
@@ -137,7 +144,8 @@
     "editBotComment": "/internal/form/edit-bot-comment",
     "viewBotCommentInfo": "/internal/form/view-bot-comment-info",
     "changeSettings": "/internal/form/change-settings",
-    "applyRule": "/internal/form/apply-rule"
+    "applyRule": "/internal/form/apply-rule",
+    "viewPostWindow": "/internal/form/view-post-window"
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",

@@ -49,7 +49,13 @@ export async function updateTargetPost() {
 export function getDateTime() {
   return new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
 }
-
+export function formatDateTime(diff: number) {
+  const days = Math.floor(diff / 86400 / 1000); // 86400 seconds in a day, 1000 milliseconds in a second
+  const hours = Math.floor((diff % (86400 * 1000)) / (3600 * 1000));
+  const minutes = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
+  const seconds = Math.floor((diff % (60 * 1000)) / 1000);
+  return `${days} day${days != 1 ? 's' : ''}, ${hours} hour${hours != 1 ? 's' : ''}, ${minutes} minute${minutes != 1 ? 's' : ''} and ${seconds} second${seconds != 1 ? 's' : ''}`
+}
 export type TaskSchedulerOptions = {
   timeToStop?: number;
   maxTime?: number;

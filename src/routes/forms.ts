@@ -660,3 +660,5 @@ forms.post('/view-streak-development', async (c) => {
   }
   return c.json<UiResponse>({ showToast: 'Streak development report sent to mod mail. Read it and then come back to this form.',}, 200);
 });
+
+forms.post('/view-post-window', async (c) => { return c.json<UiResponse>({ showToast: 'Your post windows has been displayed' }, 200); });

@@ -1,7 +1,7 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 import { reddit } from '@devvit/web/server';
-import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly, getDateTime } from './helpers';
+import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly, getDateTime, formatDateTime } from './helpers';
 
 export async function removePostFromDatabase(postId: T3, early_removal: boolean) {
 	console.log(`${getDateTime()}: Removing post ${postId} from the database. Early removal: ${early_removal}`);
@@ -72,6 +72,18 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 		await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId]);
 
 		let message = `This post has been removed by you or a moderator within 10 minutes of posting, or it has been flagged for special deletion because you contacted us through mod mail. Therefore this post does not count as your post for this day and does not contribute to your streak. Feel free to post again.` // TODO: Remove magic number 10
+
+		const post = await reddit.getPostById(postId as T3);
+		if (post) {
+			const startNextPostTimeframe = await redis.zScore(`start-next-post-timeframe-v${await DBVersion()}`, post.authorName);
+			const endNextPostTimeframe = await redis.zScore(`end-next-post-timeframe-v${await DBVersion()}`, post.authorName);
+			if (startNextPostTimeframe && endNextPostTimeframe) {
+				const now = new Date().valueOf();
+				if (endNextPostTimeframe > now && startNextPostTimeframe < now) {
+					message += ` If you create your next post later than ${formatDateTime(endNextPostTimeframe - now)} from now, you will lose your streak.`;
+				}
+			}
+		}
 		message += await botExplainer();
 		const comment = await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
 		await comment.distinguish(true);

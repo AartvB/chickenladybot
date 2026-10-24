@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { T1, T3, UiResponse } from '@devvit/web/shared';
-import { DBVersion, isInHardShutdown, isInSoftShutdown } from '../core/helpers';
+import { addToEndOfQueue, DBVersion, formatDateTime, isInHardShutdown, isInSoftShutdown } from '../core/helpers';
 import { reddit, redis } from '@devvit/web/server';
 
 export const menu = new Hono();
@@ -631,6 +631,41 @@ menu.post('/view-streak-development', async (c) => {
         title: 'View streak development',
         description: 'View the development of the streak of a user over time. Works best on mobile.',
         acceptLabel: 'View streak development',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/view-post-window', async (c) => {
+  // Allows a user to see when they can post again to maintain their streak
+  const username = await reddit.getCurrentUsername();
+  if (!username) { return c.json<UiResponse>({ showToast: 'You must be logged in to view your post window.',}, 200); }  
+  const startNextPostTimeframe = await redis.zScore(`start-next-post-timeframe-v${await DBVersion()}`, username);
+  const endNextPostTimeframe = await redis.zScore(`end-next-post-timeframe-v${await DBVersion()}`, username);
+  let postWindowMessage = '';
+  if (!startNextPostTimeframe || !endNextPostTimeframe) {
+    postWindowMessage = 'Your next post window could not be determined. This is correct if you have not posted yet, or if your streak is 0, because then you have no streak to maintain. Otherwise, I will try to determine it again now. If you try again in 1 minute and it still does not work, you have to wait until you made a new post.';
+    const latestPost = await redis.zRange(`posts-of-${username}-v${await DBVersion()}`, -1, -1);
+    if (latestPost[0] != undefined) { await addToEndOfQueue(`streak-queue-v${await DBVersion()}`, latestPost[0].member); }
+  }
+  else {
+    const now = new Date().valueOf();
+    if (endNextPostTimeframe < now) { postWindowMessage = 'Your next post window has already passed. You can post again to start building a new streak.'; }
+    else {
+      if (startNextPostTimeframe > now) { postWindowMessage += `You can create your next post in ${formatDateTime(startNextPostTimeframe - now)} from now to maintain your streak.`; }
+      else { postWindowMessage += 'You can create your next post now to maintain your streak.'; }
+      postWindowMessage += ` Do not create it later than ${formatDateTime(endNextPostTimeframe - now)} from now. Otherwise, you will lose your streak.`;      
+    }
+  }
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'viewPostWindow',
+      form: {
+        fields: [],
+        title: 'View post window',
+        description: postWindowMessage,
+        acceptLabel: 'Confirm',
         cancelLabel: 'Cancel'
       },
     },

@@ -1,4 +1,4 @@
-import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown, remindModsAboutMissingSettings } from './helpers';
+import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown, remindModsAboutMissingSettings, formatDateTime } from './helpers';
 import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
@@ -143,16 +143,20 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
 
           for (const postDateTime of postDateTimes) {
             const past = postDateTime[1] as number;
-            const diff = now - past;
-            const days = Math.floor(diff / 86400 / 1000); // 86400 seconds in a day, 1000 milliseconds in a second
-            const hours = Math.floor((diff % (86400 * 1000)) / (3600 * 1000));
-            const minutes = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
-            const seconds = Math.floor((diff % (60 * 1000)) / 1000);
-
             const earlierPost = await reddit.getPostById(postDateTime[0] as T3);
-            commentText += `${days} days, ${hours} hours, ${minutes} minutes and ${seconds} seconds ago: [${earlierPost.title}](https://www.reddit.com/${earlierPost.permalink})`;
+            commentText += `${formatDateTime(now-past)} ago: [${earlierPost.title}](https://www.reddit.com/${earlierPost.permalink})`;
             if (postDateTime[0] == postId) { commentText += " (this post)"; }
             commentText += "\n\n";
+          }
+
+          const startNextPostTimeframe = await redis.zScore(`start-next-post-timeframe-v${await DBVersion()}`, post.authorName);
+          const endNextPostTimeframe = await redis.zScore(`end-next-post-timeframe-v${await DBVersion()}`, post.authorName);
+          if (startNextPostTimeframe && endNextPostTimeframe) {
+            const now = new Date().valueOf();
+            if (endNextPostTimeframe > now && startNextPostTimeframe > now) {
+              commentText += `You can create your next post in ${formatDateTime(startNextPostTimeframe - now)} from now.`;
+              commentText += ` If you create it later than ${formatDateTime(endNextPostTimeframe - now)} from now, you will lose your streak.\n\n`;      
+            }
           }
           await removePost(postId as T3, commentText, 'days');
         }

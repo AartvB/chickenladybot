@@ -14,6 +14,8 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **streak-queue**: Contains all ids of posts for which the streak must be calculated.
 - **current-streaks**: Contains all user ids. The score is their streak.
 - **current-COAD-streaks**: Conatins all user ids. The score is their COAD-streak.
+- **start-next-post-timeframe**: Contains all user ids. The score is the earliest timestamp that users can make their next post on to keep their streak going.
+- **end-next-post-timeframe**: Contains all user ids. The score is the latest timestamp that users can make their next post on to keep their streak going.
 - **post-streaks**: Contains all post ids. The score is their streak at the point in time of posting that post.
 - **post-COAD-streaks**: Contains all post ids. The score is their COAD-streak at the point in time of posting that post.
 - **top-streaks**: Contains all user ids. The score is the highest streak they ever had.

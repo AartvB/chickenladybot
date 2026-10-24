@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
 import { reddit, redis } from '@devvit/web/server';
-import { addToEndOfQueue, botExplainer, DBVersion, isPostDeletedEarly, updateTargetPost } from '../core/helpers';
+import { addToEndOfQueue, botExplainer, DBVersion, formatDateTime, isPostDeletedEarly, updateTargetPost } from '../core/helpers';
   
 export const triggers = new Hono();
 
@@ -65,7 +65,29 @@ triggers.post('/on-post-delete', async (c) => {
   if (timestamp > Date.now() - 10 * 60000) { await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId); } // TODO: Remove magic number 10
   else if (!(await isPostDeletedEarly(postId as T3))) { 
     await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, {member: postId, score: Date.now()});
-    let message = `This post has been removed by you or a moderator after 10 minutes of posting it. Therefore this post will still count as your post for this day and keeps contributing to your streak. You may post again at the next calendar day.` // TODO: Remove magic number 10
+    let message = `This post has been removed by you or a moderator after 10 minutes of posting it. Therefore this post will still count as your post for this day and keeps contributing to your streak.` // TODO: Remove magic number 10
+
+    const post = await reddit.getPostById(postId as T3)
+    if (post) {
+      const startNextPostTimeframe = await redis.zScore(`start-next-post-timeframe-v${await DBVersion()}`, post.authorName);
+      const endNextPostTimeframe = await redis.zScore(`end-next-post-timeframe-v${await DBVersion()}`, post.authorName);
+      if (startNextPostTimeframe && endNextPostTimeframe) {
+        const now = new Date().valueOf();
+        if (endNextPostTimeframe > now) {
+          if (startNextPostTimeframe > now) {
+            message += ` You can create your next post in ${formatDateTime(startNextPostTimeframe - now)} from now.`;
+            message += ` If you create it later than ${formatDateTime(endNextPostTimeframe - now)} from now, you will lose your streak.`;      
+          }
+          else {
+            message += ` If you create your next post later than ${formatDateTime(endNextPostTimeframe - now)} from now, you will lose your streak.`;
+          }
+        }
+        else { message += ' You may post again at the next calendar day.'; }
+      }
+      else { message += ' You may post again at the next calendar day.'; }
+    }
+    else { message += ' You may post again at the next calendar day.'; }
+
     message += await botExplainer();
     const comment = await reddit.submitComment({id: postId as T3, text: message, runAs: 'APP'});
     await comment.distinguish(true);
