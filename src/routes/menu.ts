@@ -143,7 +143,7 @@ menu.post('/post-as-bot', async (c) => {
           label: 'Lock Post',
           type: 'boolean',
           defaultValue: false,
-          helpText: 'If checked, the post will be locked and no new comments can be made.'
+          helpText: 'If checked, the post will be locked and no comments can be made below it.'
         },
         {
           name: 'footerChoice',
@@ -316,7 +316,7 @@ menu.post('/comment-as-bot', async (c) => {
     label: 'Lock Comment',
     type: 'boolean',
     defaultValue: false,
-    helpText: 'If checked, the comment will be locked and no new comments can be made below it.'
+    helpText: 'If checked, the comment will be locked and no comments can be made below it.'
   },
   {
     name: 'footerChoice',
@@ -402,7 +402,7 @@ menu.post('/edit-bot-comment', async (c) => {
     label: 'Lock Comment',
     type: 'boolean',
     defaultValue: comment.isLocked(),
-    helpText: 'If checked, the comment will be locked and no new comments can be made below it.'
+    helpText: 'If checked, the comment will be locked and no comments can be made below it.'
   },
   {
     name: 'commentId',
