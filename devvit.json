@@ -51,6 +51,20 @@
         "endpoint": "/internal/menu/toggle-shutdown"
       },
       {
+        "label": "Apply rule",
+        "description": "Apply a certain rule to this post.",
+        "location": "post",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/apply-rule"
+      },
+      {
+        "label": "Comment as bot",
+        "description": "Make a comment as the bot.",
+        "location": "post",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/comment-as-bot"
+      },
+      {
         "label": "Fix streak",
         "description": "Fix the streak of a user.",
         "location": "post",
@@ -81,13 +95,6 @@
       {
         "label": "Comment as bot",
         "description": "Make a comment as the bot.",
-        "location": "post",
-        "forUserType": "moderator",
-        "endpoint": "/internal/menu/comment-as-bot"
-      },
-      {
-        "label": "Comment as bot",
-        "description": "Make a comment as the bot.",
         "location": "comment",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/comment-as-bot"
@@ -112,13 +119,6 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/change-settings"
-      },
-      {
-        "label": "Apply rule",
-        "description": "Apply a certain rule to this post.",
-        "location": "post",
-        "forUserType": "moderator",
-        "endpoint": "/internal/menu/apply-rule"
       }
     ]
   },
