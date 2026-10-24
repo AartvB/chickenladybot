@@ -588,55 +588,6 @@ menu.post('/apply-rule', async (c) => {
   }, 200);
 });
 
-menu.post('/view-streak-development', async (c) => {
-  // Allows a mod to view the latest post of a user, and how their streak developed over these posts
-  const values = await c.req.json<{targetId?: string}>();
-  const postId = values.targetId;
-  if (postId == undefined) { return c.json<UiResponse>({ showToast: 'Post info not found',}, 200); }
-  const post = await reddit.getPostById(postId as T3);
-  const authorName = post.authorName;
-  const timezones = Intl.supportedValuesOf('timeZone')
-  return c.json<UiResponse>({
-    showForm: {
-      name: 'viewStreakDevelopment',
-      form: {
-        fields: [{
-          name: 'authorName',
-          label: 'Author Name',
-          type: 'string',
-          defaultValue: authorName,
-          helpText: 'This is the name of the user for whom you want to view streak development.'
-        },
-        {
-          name: 'timeZone',
-          label: 'Time Zone',
-          type: 'select',
-          options: timezones.map((tz) => ({ value: tz, label: tz })),
-          defaultValue: ['Europe/Amsterdam'],
-        },
-        {
-          name: 'numberOfPosts',
-          label: 'Number of Posts',
-          type: 'number',
-          defaultValue: 6,
-          helpText: 'How many posts you want to view.'
-        },
-        {
-          name: 'includePostLink',
-          label: 'Include Post Links',
-          type: 'boolean',
-          defaultValue: true,
-          helpText: 'If checked, the link to the posts will be included in the output.'
-        }],
-        title: 'View streak development',
-        description: 'View the development of the streak of a user over time. Works best on mobile.',
-        acceptLabel: 'View streak development',
-        cancelLabel: 'Cancel'
-      },
-    },
-  }, 200);
-});
-
 menu.post('/view-post-window', async (c) => {
   // Allows a user to see when they can post again to maintain their streak
   const username = await reddit.getCurrentUsername();
