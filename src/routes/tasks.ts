@@ -3,7 +3,6 @@ import { handleBackgroundStreak, handleStreak } from '../core/streak';
 import { handleNewPosts, detectNewPosts } from '../core/counting';
 import { handleCleanup, handleDeletedPosts } from '../core/deletion';
 import { handleLeaderboards } from '../core/leaderboards';
-//import { DBVersion, restoreDatabaseBackup } from '../core/helpers';
 import { DBVersion } from '../core/helpers';
 import { addRecentPostsToDatabase } from '../core/counting';
 import { redis, type TaskResponse } from '@devvit/web/server';
