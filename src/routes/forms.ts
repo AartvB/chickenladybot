@@ -405,6 +405,9 @@ forms.post('/apply-rule', async (c) => {
   if (post.subredditName != context.subredditName) { return c.json<UiResponse>({ showToast: 'The provided post ID is not in the correct subreddit. Please try again.',}, 200); }
 
   if (rule != 'selfie' && rule != 'political') { return c.json<UiResponse>({ showToast: 'Invalid rule provided. Please try again.',}, 200); }
+
+  const modUsername = await reddit.getCurrentUsername();
+  if (modUsername == undefined) { return c.json<UiResponse>({ showToast: 'You must be logged in to apply a rule.', }, 200); }
   if (rule == 'selfie') {
     const modNoteText = 'Had to be reminded of selfie rules.';
     const timestamp = post.createdAt.getTime();
@@ -446,10 +449,15 @@ forms.post('/apply-rule', async (c) => {
         return c.json<UiResponse>({ showToast: 'This user broke selfie rules ' + nAllowedReminders + ' or more times in the past, so their post was removed.',}, 200);
       }
 
-      const comment = await post.addComment({text: 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the selfie rules in the future.'+await botExplainer(), runAs: 'APP'});
+      const commentText = 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the selfie rules in the future.'+await botExplainer();
+      const comment = await post.addComment({text: commentText, runAs: 'APP'});
       comment.distinguish(true);
+
+      const commentDateTimeUTC = comment.createdAt.toISOString();
+      let commentInfo = `u/${modUsername} used the 'apply rule' feature on ${commentDateTimeUTC} UTC, which created this comment.\n\nComment body:\n\n${commentText}`;
+      await redis.set(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`, commentInfo);
+ 
       post.approve();
-      console.log(modNotes);
       await reddit.addModNote({subreddit: context.subredditName, user: post.authorName, note: modNoteText});
       return c.json<UiResponse>({ showToast: 'The post has been flaired as a selfie and marked as a spoiler.',}, 200);
     }
@@ -482,10 +490,15 @@ forms.post('/apply-rule', async (c) => {
         return c.json<UiResponse>({ showToast: 'This user broke political rules ' + nAllowedReminders + ' or more times in the past, so their post was removed.',}, 200);
       }
 
-      const comment = await post.addComment({text: 'This post didn\'t have the political flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the political rules in the future.'+await botExplainer(), runAs: 'APP'});
+      const commentText = 'This post didn\'t have the political flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the political rules in the future.'+await botExplainer();
+      const comment = await post.addComment({text: commentText, runAs: 'APP'});
       comment.distinguish(true);
+
+      const commentDateTimeUTC = comment.createdAt.toISOString();
+      let commentInfo = `u/${modUsername} used the 'apply rule' feature on ${commentDateTimeUTC} UTC, which created this comment.\n\nComment body:\n\n${commentText}`;
+      await redis.set(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`, commentInfo);
+
       post.approve();
-      console.log(modNotes);
       await reddit.addModNote({subreddit: context.subredditName, user: post.authorName, note: modNoteText});
       return c.json<UiResponse>({ showToast: 'The post has been flaired as a political and marked as a spoiler.',}, 200);
     }
