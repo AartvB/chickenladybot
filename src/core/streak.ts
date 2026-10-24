@@ -5,7 +5,6 @@ import { T3 } from '@devvit/shared-types/tid.js';
 
 async function calculateStreakForTimezone(earlierTimestamps: number[], otherStreakSources: undefined | {streak: number, source: string, timestamp: number}[], timestamp: number, timeZone: string): Promise<{ streak: number, CoadStreak: number}> {
   // TODO: Stop loop if it is clear that it won't get better. For example, the last post was more than 48 hours ago.
-  // TODO: Handle LOCAL saved streaks
 
   // Sort timestamps from latest to earliest
   const sortedTimestamps = [...earlierTimestamps].sort((a, b) => b - a);
@@ -16,10 +15,12 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
   const getPreviousDate = (date: string): string => {
     const [year, month, day] = date.split("-").map(Number);
     if (year == undefined || month == undefined || day == undefined) { throw new Error(`Invalid date format: ${date}`);}
-    const dateUtc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-    dateUtc.setUTCDate(dateUtc.getUTCDate() - 1);
-    return dateFormatter.format(dateUtc);
-  };
+    const dateUtc = new Date(Date.UTC(year, month - 1, day - 1, 12));
+    const yyyy = dateUtc.getUTCFullYear();
+    const mm = String(dateUtc.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dateUtc.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
 
   const today = getDate(timestamp);
   const yesterday = getPreviousDate(today);
@@ -140,7 +141,7 @@ async function updateUserFlair(username: string, streak: number) {
     if (streak > 0) { userFlair += "Streak: " + streak; }
     else { userFlair = flairText; }
 
-		if (username === "chickenladybot") { userFlair = "Streak: 3.1415926535"; }
+		if (username === "chickenbotonceaday") { userFlair = "Streak: 3.1415926535"; }
 
 		if (currentFlair != userFlair) {
       console.log(`${getDateTime()}: Updating flair for user ${username} to streak ${streak} (current flair: '${currentFlair}', flair text: '${flairText}', new flair: '${userFlair}')`);
