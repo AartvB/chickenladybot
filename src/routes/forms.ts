@@ -4,6 +4,7 @@ import { context, reddit, redis, settings } from '@devvit/web/server';
 import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown, addToEndOfQueue, getDateTime, botExplainer, remindModsAboutMissingSettings } from '../core/helpers';
 import { addPostToDatabase, removePost } from '../core/counting';
 import { removePostFromDatabase } from '../core/deletion';
+import { reportStreakDevelopment } from '../core/streak';
 
 export const forms = new Hono();
 
@@ -66,45 +67,6 @@ forms.post('/activate-shutdown', async (c) => {
     console.log(`${getDateTime()}: Shutdown mode activated. Bot is now ${values.hardShutdown ? 'in hard shutdown mode' : 'in soft shutdown mode'}.`);
     return c.json<UiResponse>({ showToast: uiResponse }, 200);
   }
-});
-
-forms.post('/add-post-to-streak-database', async (c) => {
-  console.log(`${getDateTime()}: Received request to add a post to the streak database.`);
-  const dbVersion = await DBVersion();
-  const values = await c.req.json<{postId?: string}>();
-  if (values.postId == undefined) { return c.json<UiResponse>({ showToast: 'No post ID provided. Please try again.',}, 200); }
-  const targetPostId = "t3_" + values.postId;
-  let targetPost;
-  try { targetPost = await reddit.getPostById(targetPostId as T3); }
-  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
-  const alreadyInDatabase = await redis.zScore(`posts-v${dbVersion}`, targetPostId as T3) != undefined;
-  if (alreadyInDatabase) { return c.json<UiResponse>({ showToast: 'The provided post ID is already in the streak database. Please try again.',}, 200); }  
-  const postNumber = parseInt(targetPost.title);
-  if (isNaN(postNumber)) { return c.json<UiResponse>({ showToast: 'The provided post ID does not correspond to a valid counting post. Please try again.',}, 200); }
-  const authorName = targetPost.authorName;
-  const timestamp = targetPost.createdAt.getTime();
-
-  await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [targetPostId as T3]);
-  await redis.zRem(`late-deleted-post-queue-v${dbVersion}`, [targetPostId as T3]);
-  await redis.zRem(`early-deleted-posts-v${dbVersion}`, [targetPostId as T3]);
-
-  await addPostToDatabase(targetPostId as T3, postNumber, authorName, timestamp);
-
-  console.log(`${getDateTime()}: Manually added post ${targetPostId} to the streak database (post number: ${postNumber}, author: ${authorName}, timestamp: ${timestamp}).`);
-  return c.json<UiResponse>({ showToast: `Added post ${targetPostId} to the streak database.` }, 200);
-});
-
-forms.post('/remove-post-from-streak-database', async (c) => {
-  console.log(`${getDateTime()}: Received request to remove a post from the streak database.`);
-  const dbVersion = await DBVersion();
-  const values = await c.req.json<{postId?: string}>();
-  if (values.postId == undefined) { return c.json<UiResponse>({ showToast: 'No post ID provided. Please try again.',}, 200); }
-  const targetPostId = "t3_" + values.postId;
-  const alreadyInDatabase = await redis.zScore(`posts-v${dbVersion}`, targetPostId as T3) != undefined;
-  if (!alreadyInDatabase) { return c.json<UiResponse>({ showToast: 'The provided post ID is not in the streak database. Please try again.',}, 200); }
-  await removePostFromDatabase(targetPostId as T3, true);
-  console.log(`${getDateTime()}: Manually removed post ${targetPostId} from the streak database.`);
-  return c.json<UiResponse>({ showToast: `Removed post ${targetPostId} from the streak database.` }, 200);
 });
 
 forms.post('/add-manual-streak', async (c) => {
@@ -532,46 +494,156 @@ forms.post('/apply-rule', async (c) => {
   }
 });
   
-forms.post('/view-streak-development', async (c) => {  
-  console.log(`${getDateTime()}: Received request to view streak development.`);
-  const dbVersion = await DBVersion();
-  const values = await c.req.json<{authorName: string, timeZone: string, numberOfPosts: number, includePostLink: boolean}>();
-  const authorName = values.authorName;
-  const numberOfPosts = values.numberOfPosts;
-  const includePostLink = values.includePostLink;
-  const recentPosts = await redis.zRange(`posts-of-${authorName}-v${dbVersion}`, -numberOfPosts, -1, );
-  let streakInfo = `Recent streaks for user ${authorName}:\n\n`;
-  for (const postInfo of recentPosts) {
-    const postId = postInfo['member'];
-    const streakLength = await redis.zScore(`post-streaks-v${dbVersion}`, postId);
-    const timestamp = await redis.zScore(`posts-of-${authorName}-v${dbVersion}`, postId);
-    const dateStr = timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: values.timeZone }) : 'Unknown date';
-    if (includePostLink) {
-      if (streakLength != undefined) { streakInfo += `${dateStr}, post: https://www.reddit.com/r/${context.subredditName}/comments/${postId}: ${streakLength}.\n\n`; }
-      else { streakInfo += `${dateStr}, post: https://www.reddit.com/r/${context.subredditName}/comments/${postId}: Unknown.\n\\n`; }
-    }
-    else {
-      if (streakLength != undefined) { streakInfo += `${dateStr}: ${streakLength}.\n\n`; }
-      else { streakInfo += `${dateStr}: Unknown.\n\n`; }
-    }
-  }
-  // TODO: Add COAD streaks to this output
-  // TODO: Add local streaks to this output
-  // TODO: Add deleted posts to this output, both within and after 10 minutes
-  // TODO: Work on formatting of this output to make it more readable
-  // TODO: Add option to send it as a private message to the mod instead of displaying it in the form
+forms.post('/fix-streak-followup', async (c) => {
+  console.log(`${getDateTime()}: Received request to fix streak followup.`);
+  const values = await c.req.json<{postId: string, method: string}>();
+  const postId = `t3_${values.postId}`;
+  const method = values.method;
+  let post;
+  try { post = await reddit.getPostById(postId as T3); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
+  if (post.subredditName != context.subredditName) { return c.json<UiResponse>({ showToast: 'The provided post ID is not in the correct subreddit. Please try again.',}, 200); }
 
-  return c.json<UiResponse>({
-    showForm: {
-      name: 'displayStreakDevelopment',
-      form: {
-        fields: [],
-        title: 'Streak Development',
-        description: streakInfo,
-        acceptLabel: 'Close',
-      }
-    },
-  }, 200);
+  if (method == 'add') {
+    console.log(`${getDateTime()}: Received request to add a post to the streak database.`);
+    const dbVersion = await DBVersion();
+    const alreadyInDatabase = await redis.zScore(`posts-v${dbVersion}`, postId as T3) != undefined;
+    if (alreadyInDatabase) { return c.json<UiResponse>({ showToast: 'The provided post ID is already in the streak database. Please try again.',}, 200); }  
+    const postNumber = parseInt(post.title);
+    if (isNaN(postNumber)) { return c.json<UiResponse>({ showToast: 'The provided post ID does not correspond to a valid counting post. Please try again.',}, 200); }
+    const authorName = post.authorName;
+    const timestamp = post.createdAt.getTime();
+
+    await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId as T3]);
+    await redis.zRem(`late-deleted-post-queue-v${dbVersion}`, [postId as T3]);
+    await redis.zRem(`early-deleted-posts-v${dbVersion}`, [postId as T3]);
+
+    await addPostToDatabase(postId as T3, postNumber, authorName, timestamp);
+
+    console.log(`${getDateTime()}: Manually added post ${postId} to the streak database (post number: ${postNumber}, author: ${authorName}, timestamp: ${timestamp}).`);
+    return c.json<UiResponse>({ showToast: `Added post ${postId} to the streak database.` }, 200);
+  }
+  if (method == 'remove') {
+    console.log(`${getDateTime()}: Received request to remove a post from the streak database.`);
+    const dbVersion = await DBVersion();
+    const alreadyInDatabase = await redis.zScore(`posts-v${dbVersion}`, postId as T3) != undefined;
+    if (!alreadyInDatabase) { return c.json<UiResponse>({ showToast: 'The provided post ID is not in the streak database. Please try again.',}, 200); }
+    await removePostFromDatabase(postId as T3, true);
+    console.log(`${getDateTime()}: Manually removed post ${postId} from the streak database.`);
+    return c.json<UiResponse>({ showToast: `Removed post ${postId} from the streak database.` }, 200);
+  }
+  if (method == 'manual') {
+    return c.json<UiResponse>({
+      showForm: {
+        name: 'addManualStreak',
+        form: {
+          fields: [{
+            name: 'streak',
+            label: 'Streak Length',
+            type: 'number',
+            helpText: 'Enter the length of the streak you want to add.'
+          },
+          {
+            name: 'postId',
+            label: 'Post ID',
+            type: 'string',
+            defaultValue: postId.slice(3),
+            helpText: 'This is the ID of the post for which you want to add the streak to the database (this can be a post in the current subreddit or one in r/CountOnceADay).'
+          }],
+          title: 'Add a manual streak',
+          description: 'This form allows you to add a manual streak for a user. This is mainly useful for if a user moves from r/CountOnceADay to the current subreddit and you want to add their streak to the database. In that case put the post ID of their last post in r/CountOnceADay and the length of their streak.',
+          acceptLabel: 'Add manual streak',
+          cancelLabel: 'Cancel'
+        },
+      },
+    }, 200);
+  }
+  return c.json<UiResponse>({ showToast: 'Invalid method provided. Please try again.',}, 200);
 });
 
-forms.post('/display-streak-development', async (c) => { return c.json<UiResponse>({ showToast: "Streak information displayed." }, 200); });
+forms.post('/fix-streak', async (c) => {
+  console.log(`${getDateTime()}: Received request to fix streak.`);
+  const values = await c.req.json<{postId: string, receivedStreakReport: boolean}>();
+  const postId = `t3_${values.postId}`;
+  let post;
+  try { post = await reddit.getPostById(postId as T3); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
+  if (post.subredditName != context.subredditName) { return c.json<UiResponse>({ showToast: 'The provided post ID is not in the correct subreddit. Please try again.',}, 200); }
+  const username = post.authorName;
+  const receivedStreakReport = values.receivedStreakReport;
+  if (!receivedStreakReport) {
+    const timezones = Intl.supportedValuesOf('timeZone')
+    return c.json<UiResponse>({
+      showForm: {
+        name: 'viewStreakDevelopment',
+        form: {
+          fields: [{
+            name: 'username',
+            label: 'Username',
+            type: 'string',
+            defaultValue: username,
+            helpText: 'This is the name of the user for whom you want to view streak development.',
+            required: true
+          },
+          {
+            name: 'timeZone',
+            label: 'Time Zone',
+            type: 'select',
+            options: timezones.map((tz) => ({ value: tz, label: tz })),
+            defaultValue: ['Europe/Amsterdam'],
+            required: true,
+            helpText: 'This is the time zone in which you want to view the streak development.'
+          }],
+          title: 'View streak development',
+          description: 'This will send a report to mod mail with the streak development of the user. Please read it and then come back to this form to complete the process.',
+          acceptLabel: 'View streak development',
+          cancelLabel: 'Cancel'
+        },
+      },
+    }, 200);
+  }
+  if (receivedStreakReport) {
+    return c.json<UiResponse>({
+      showForm: {
+        name: 'fixStreakFollowup',
+        form: {
+          fields: [{
+            name: 'method',
+            label: 'Method',
+            type: 'select',
+            options: [
+              { value: 'add', label: 'Add post to streak database' },
+              { value: 'remove', label: 'Remove post from streak database' },
+              { value: 'manual', label: 'Add manual streak to database' }
+          ],
+            helpText: 'Select the method you want to use to fix the streak. Look at the mod mail report to see which method is appropriate. If you are unsure, ask u/Aartvb.',
+            required: true
+          },
+          {
+            name: 'postId',
+            label: 'Post ID',
+            type: 'string',
+            defaultValue: postId.slice(3),
+            helpText: 'This is the ID of the post for which you want to fix the streak.',
+            required: true
+          }],
+          title: 'Fix a user\'s streak',
+          description: 'This form allows you to fix the streak of a user. This is useful if a user complains about their streak.',
+          acceptLabel: 'Fix streak',
+          cancelLabel: 'Cancel'
+        },
+      },
+    }, 200);
+  }
+});
+
+forms.post('/view-streak-development', async (c) => {
+  const values = await c.req.json<{username: string, timeZone: string}>();
+  const username = values.username;
+  const timezone = values.timeZone;
+  const success = await reportStreakDevelopment(username, timezone);
+  if (!success) {
+    return c.json<UiResponse>({ showToast: 'Failed to send streak development report to mod mail.',}, 200);
+  }
+  return c.json<UiResponse>({ showToast: 'Streak development report sent to mod mail. Read it and then come back to this form.',}, 200);
+});

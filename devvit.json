@@ -51,32 +51,11 @@
         "endpoint": "/internal/menu/toggle-shutdown"
       },
       {
-        "label": "Add post to streak database",
-        "description": "Add this post to the streak database.",
+        "label": "Fix streak",
+        "description": "Fix the streak of a user.",
         "location": "post",
         "forUserType": "moderator",
-        "endpoint": "/internal/menu/add-post-to-streak-database"
-      },
-      {
-        "label": "Remove post from streak database",
-        "description": "Remove this post from the streak database.",
-        "location": "post",
-        "forUserType": "moderator",
-        "endpoint": "/internal/menu/remove-post-from-streak-database"
-      },
-      {
-        "label": "Add manual streak",
-        "description": "Add a manual streak for a user.",
-        "location": "post",
-        "forUserType": "moderator",
-        "endpoint": "/internal/menu/add-manual-streak"
-      },
-      {
-        "label": "View streak development",
-        "description": "View the development of streak over time. Works best on mobile.",
-        "location": "post",
-        "forUserType": "moderator",
-        "endpoint": "/internal/menu/view-streak-development"
+        "endpoint": "/internal/menu/fix-streak"
       },
       {
         "label": "Post as bot",
@@ -147,11 +126,10 @@
     "deactivateHardShutdown": "/internal/form/deactivate-hard-shutdown",
     "handleSoftShutdown": "/internal/form/handle-soft-shutdown",
     "activateShutdown": "/internal/form/activate-shutdown",
-    "addPostToStreakDatabase": "/internal/form/add-post-to-streak-database",
-    "removePostFromStreakDatabase": "/internal/form/remove-post-from-streak-database",
+    "fixStreak": "/internal/form/fix-streak",
     "addManualStreak": "/internal/form/add-manual-streak",
     "viewStreakDevelopment": "/internal/form/view-streak-development",
-    "displayStreakDevelopment": "/internal/form/display-streak-development",
+    "fixStreakFollowup": "/internal/form/fix-streak-followup",
     "postAsBot": "/internal/form/post-as-bot",
     "editBotPost": "/internal/form/edit-bot-post",
     "viewBotPostInfo": "/internal/form/view-bot-post-info",

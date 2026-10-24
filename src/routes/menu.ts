@@ -71,78 +71,33 @@ menu.post('/toggle-shutdown', async (c) => {
   }
 });
 
-menu.post('/add-post-to-streak-database', async (c) => {
-  // Allows a moderator to add a post manually to the streak database
+menu.post('/fix-streak', async (c) => {
+  // A form that allows a moderator to fix a streak of a user
   const values = await c.req.json<{targetId?: string}>();
-  const postId = values.targetId?.slice(3) ?? '';
+  const postId = values.targetId;
+  if (postId == undefined) { return c.json<UiResponse>({ showToast: 'Post info not found',}, 200); }
   return c.json<UiResponse>({
     showForm: {
-      name: 'addPostToStreakDatabase',
+      name: 'fixStreak',
       form: {
         fields: [{
-          name: 'postId',
-          label: 'Post ID',
-          type: 'string',
-          defaultValue: postId,
-          helpText: 'This is the ID of the post you want to add to the streak database (the relevant ID is filled in automatically).'
-        }],
-        title: 'Add this post to the streak database',
-        description: 'This form allows you to add a post to the streak database. This is useful if a user has posted a number but the bot did not process it for some reason. You can add the post to the database so that it counts towards their streak.',
-        acceptLabel: 'Add post to streak database',
-        cancelLabel: 'Cancel'
-      },
-    },
-  }, 200);
-});
-
-menu.post('/remove-post-from-streak-database', async (c) => {
-  // Allows a mod to remove a post manually from the streak database
-  const values = await c.req.json<{targetId?: string}>();
-  const postId = values.targetId?.slice(3) ?? '';
-  return c.json<UiResponse>({
-    showForm: {
-      name: 'removePostFromStreakDatabase',
-      form: {
-        fields: [{
-          name: 'postId',
-          label: 'Post ID',
-          type: 'string',
-          defaultValue: postId,
-          helpText: 'This is the ID of the post you want to remove from the streak database (the relevant ID is filled in automatically).'
-        }],
-        title: 'Remove this post from the streak database',
-        description: 'This form allows you to remove a post from the streak database. This is useful if a post was added to the database by mistake and you want to remove it.',
-        acceptLabel: 'Remove post from streak database',
-        cancelLabel: 'Cancel'
-      },
-    },
-  }, 200);
-});
-
-menu.post('/add-manual-streak', async (c) => {
-  // Allows a mod to set the streak of the user at a certain post
-  const values = await c.req.json<{targetId?: string}>();
-  const postId = values.targetId?.slice(3) ?? '';
-  return c.json<UiResponse>({
-    showForm: {
-      name: 'addManualStreak',
-      form: {
-        fields: [{
-          name: 'streak',
-          label: 'Streak Length',
-          type: 'number',
-          helpText: 'Enter the length of the streak you want to add.'
+          name: 'receivedStreakReport',
+          label: 'Received streak report',
+          type: 'boolean',
+          helpText: 'Did you already receive a report about this user\'s streak in mod mail?',
+          defaultValue: false
         },
         {
           name: 'postId',
           label: 'Post ID',
           type: 'string',
-          defaultValue: postId,
-          helpText: 'This is the ID of the post for which you want to add the streak to the database (this can be a post in the current subreddit or one in r/CountOnceADay).'
+          helpText: 'The ID of the post that you want to fix the streak for (the relevant ID is filled in automatically).',
+          defaultValue: postId.slice(3),
+          required: true
         }],
-        title: 'Add a manual streak',
-        description: 'This form allows you to add a manual streak for a user. This is mainly useful for if a user moves from r/CountOnceADay to the current subreddit and you want to add their streak to the database. In that case put the post ID of their last post in r/CountOnceADay and the length of their streak.',
-        acceptLabel: 'Add manual streak',
+        title: 'Fix a user\'s streak',
+        description: 'This form allows you to fix the streak of a user. This is useful if a user complains about their streak.',
+        acceptLabel: 'Fix streak',
         cancelLabel: 'Cancel'
       },
     },

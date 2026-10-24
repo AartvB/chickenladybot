@@ -210,3 +210,65 @@ export async function handleBackgroundStreak() {
 	}
   return false;
 }
+
+export async function reportStreakDevelopment(username: string, timezone: string) {
+  console.log(`${getDateTime()}: Received request to report streak development.`);
+  const dbVersion = await DBVersion();
+  const recentPosts = await redis.zRange(`posts-of-${username}-v${dbVersion}`, 0, -1, );
+  const otherStreakSourcesStr = await redis.get(`other-streaks-of-${username}-v${dbVersion}`);
+  let otherStreakSources = undefined;
+  if (otherStreakSourcesStr != undefined) { otherStreakSources = JSON.parse(otherStreakSourcesStr); }
+
+  let events: { timestamp: number, event: string }[] = [];
+  for (const postInfo of recentPosts) {
+    const postId = postInfo['member'];
+    const streakLength = await redis.zScore(`post-streaks-v${dbVersion}`, postId);
+    const timestamp = postInfo['score'];
+    const dateStr = timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: timezone }) : 'Unknown date';
+    let eventText;
+    let postTitle = 'title unknown';
+    try {
+      const post = await reddit.getPostById(postId as T3);
+      postTitle = post.title;
+    }
+    catch (error) { console.error(`${getDateTime()}: Error fetching post ${postId} for streak development report:`, error); }
+
+    const isLateDeleted = await redis.zScore(`late-deleted-post-queue-v${dbVersion}`, postId) != undefined;
+
+    if (streakLength != undefined) { eventText = `${dateStr}: post: [${postTitle}](https://www.reddit.com/r/${context.subredditName}/comments/${postId.slice(3)}). Streak: ${streakLength}.${isLateDeleted ? ' (deleted after more than 10 minutes)' : ''}\n\n`; }
+    else { eventText = `${dateStr}: post: [${postTitle}](https://www.reddit.com/r/${context.subredditName}/comments/${postId.slice(3)}). Streak: Unknown.${isLateDeleted ? ' (deleted after more than 10 minutes)' : ''}\n\n`; }
+    events.push({ timestamp: timestamp, event: eventText });
+  }
+  for (const streakSource of otherStreakSources ?? []) {
+    const timestamp = streakSource.timestamp;
+    const dateStr = timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: timezone }) : 'Unknown date';
+    events.push({ timestamp: timestamp, event: `${dateStr}: Manually added a ${streakSource.source} streak or a post was removed so the post data has been deleted for privacy reasons. Streak: ${streakSource.streak}\n\n` });
+  }
+  events.sort((a, b) => b.timestamp - a.timestamp);
+
+  let report = `A moderator requested a streak development report for user u/${username}.\n\n`;
+  report += 'If the user has deleted a post, and made a new post close to the time of the deleted post, the streak is reset. In this case go to the deleted post and choose to remove the post from the streak database.\n\n';
+  report += 'If there is a post that is not in the database, and it should be, you can add it to the streak database by going to the post and choosing to add it to the streak database.\n\n';
+  report += 'If there was a special event (such as a user unrightfully being banned, a reddit bug etc.) that caused the streak to be reset, you can add a manual streak to the database by going to the post and choosing to add a manual streak to the streak database.\n\n\n\n';
+  report += '# Streak Development\n\n';
+  report += 'Below you can find the streak development of the user. If you want to see the streak development in a different timezone, please submit a new request with the desired timezone.\n\n';
+  let modMailConversationId: string | undefined = undefined;
+  for (const event of events) {
+    let newReport = report + event.event;
+    if (newReport.length > 10000) {
+      if (modMailConversationId == undefined) {
+        const modMailConversation = await reddit.modMail.createConversation({body: report, subject: `Streak development for ${username}`, subredditName: context.subredditName});
+        modMailConversationId = modMailConversation.conversation.id;
+        if (modMailConversationId == undefined) { console.error(`${getDateTime()}: Error creating mod mail conversation for streak development report for user ${username}.`); return false; }
+      }
+      else { await reddit.modMail.reply({conversationId: modMailConversationId, body: report}); }
+      report = event.event;
+    }
+    else { report = newReport; }
+  }
+
+  if (modMailConversationId == undefined) { await reddit.modMail.createConversation({body: report, subject: `Streak development for ${username}`, subredditName: context.subredditName}); }
+  else { await reddit.modMail.reply({conversationId: modMailConversationId, body: report}); }
+
+  return true;
+}
