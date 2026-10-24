@@ -128,17 +128,17 @@ menu.post('/add-manual-streak', async (c) => {
       name: 'addManualStreak',
       form: {
         fields: [{
+          name: 'streak',
+          label: 'Streak Length',
+          type: 'number',
+          helpText: 'Enter the length of the streak you want to add.'
+        },
+        {
           name: 'postId',
           label: 'Post ID',
           type: 'string',
           defaultValue: postId,
           helpText: 'This is the ID of the post for which you want to add the streak to the database (this can be a post in the current subreddit or one in r/CountOnceADay).'
-        },
-        {
-          name: 'streak',
-          label: 'Streak Length',
-          type: 'number',
-          helpText: 'Enter the length of the streak you want to add.'
         }],
         title: 'Add a manual streak',
         description: 'This form allows you to add a manual streak for a user. This is mainly useful for if a user moves from r/CountOnceADay to the current subreddit and you want to add their streak to the database. In that case put the post ID of their last post in r/CountOnceADay and the length of their streak.',
@@ -230,16 +230,7 @@ menu.post('/edit-bot-post', async (c) => {
     showForm: {
       name: 'editBotPost',
       form: {
-        fields: [
-        {
-          name: 'postId',
-          label: 'Post ID',
-          type: 'string',
-          defaultValue: postId,
-          helpText: 'This is the ID of the post you want to edit (the relevant ID is filled in automatically).',
-          required: true
-        },
-        {
+        fields: [{
           name: 'body',
           label: 'Post Body',
           type: 'paragraph',
@@ -267,6 +258,14 @@ menu.post('/edit-bot-post', async (c) => {
           type: 'boolean',
           defaultValue: post.isLocked(),
           helpText: 'If checked, the post will be locked and no comments can be made below it.'
+        },
+        {
+          name: 'postId',
+          label: 'Post ID',
+          type: 'string',
+          defaultValue: postId,
+          helpText: 'This is the ID of the post you want to edit (the relevant ID is filled in automatically).',
+          required: true
         }],
         title: 'Edit this bot post',
         description: 'This form allows you to edit a post that was made by a moderator as the bot. Note that moderators can always see who made and edited the post.',
@@ -303,7 +302,14 @@ menu.post('/view-bot-post-info', async (c) => {
     showForm: {
       name: 'viewBotPostInfo',
       form: {
-        fields: [
+        fields: [{
+          name: 'version',
+          label: 'Version',
+          type: 'select',
+          options: versions.map((v) => ({ label: v.label, value: v.value })),
+          defaultValue: ['summary'],
+          helpText: 'Select the version of the post info you want to view.'
+        },
         {
           name: 'postId',
           label: 'Post ID',
@@ -311,14 +317,6 @@ menu.post('/view-bot-post-info', async (c) => {
           defaultValue: postId,
           helpText: 'This is the ID of the post you want to view info for (the relevant ID is filled in automatically).',
           required: true
-        },
-        {
-          name: 'version',
-          label: 'Version',
-          type: 'select',
-          options: versions.map((v) => ({ label: v.label, value: v.value })),
-          defaultValue: ['summary'],
-          helpText: 'Select the version of the post info you want to view.'
         }],
         title: 'View bot post info',
         description: 'View the version history of a bot post: which moderators made which changes at which point in time? It gets sent to you in a private message.',
@@ -335,16 +333,7 @@ menu.post('/comment-as-bot', async (c) => {
   const isPost = values.targetId?.startsWith('t3_') ?? false;
   const isComment = values.targetId?.startsWith('t1_') ?? false;
   if (!isPost && !isComment) { return c.json<UiResponse>({ showToast: 'Invalid target ID. Please try again.',}, 200); }
-  let fields: any[] = [
-    {
-      name: 'targetId',
-      label: 'Response To (Post or Comment) ID',
-      type: 'string',
-      defaultValue: values.targetId,
-      helpText: 'This is the ID of the post or comment you want to respond to as the bot (the relevant ID is filled in automatically).',
-      required: true
-    },
-    {
+  let fields: any[] = [{
       name: 'body',
       label: 'Comment Text',
       type: 'paragraph',
@@ -357,8 +346,7 @@ menu.post('/comment-as-bot', async (c) => {
       type: 'boolean',
       defaultValue: true,
       helpText: 'If checked, the mod label appears on the comment.'
-    }
-  ]
+    }]
   if (isPost) {
     fields.push({
       name: 'stickyComment',
@@ -392,6 +380,14 @@ menu.post('/comment-as-bot', async (c) => {
     label: 'Custom Footer',
     type: 'string',
     helpText: 'If you selected "Custom" in the previous field, fill in the footer line here. Otherwise leave this empty.',
+  },
+  {
+    name: 'targetId',
+    label: 'Response To (Post or Comment) ID',
+    type: 'string',
+    defaultValue: values.targetId,
+    helpText: 'This is the ID of the post or comment you want to respond to as the bot (the relevant ID is filled in automatically).',
+    required: true
   });
 
   return c.json<UiResponse>({
@@ -420,14 +416,6 @@ menu.post('/edit-bot-comment', async (c) => {
   const commentOnPost = comment.parentId.startsWith('t3_');
 
   let fields: any[] = [
-    {
-      name: 'commentId',
-      label: 'Comment ID',
-      type: 'string',
-      defaultValue: values.targetId,
-      helpText: 'This is the ID of the comment you want to edit (the relevant ID is filled in automatically).',
-      required: true
-    },
     {
       name: 'body',
       label: 'Comment Text',
@@ -460,6 +448,14 @@ menu.post('/edit-bot-comment', async (c) => {
     type: 'boolean',
     defaultValue: comment.isLocked(),
     helpText: 'If checked, the comment will be locked and no new comments can be made below it.'
+  },
+  {
+    name: 'commentId',
+    label: 'Comment ID',
+    type: 'string',
+    defaultValue: values.targetId,
+    helpText: 'This is the ID of the comment you want to edit (the relevant ID is filled in automatically).',
+    required: true
   });
 
   return c.json<UiResponse>({
@@ -504,20 +500,20 @@ menu.post('/view-bot-comment-info', async (c) => {
       form: {
         fields: [
         {
-          name: 'commentId',
-          label: 'Comment ID',
-          type: 'string',
-          defaultValue: commentId,
-          helpText: 'This is the ID of the comment you want to view info for (the relevant ID is filled in automatically).',
-          required: true
-        },
-        {
           name: 'version',
           label: 'Version',
           type: 'select',
           options: versions.map((v) => ({ label: v.label, value: v.value })),
           defaultValue: ['summary'],
           helpText: 'Select the version of the comment info you want to view.'
+        },
+        {
+          name: 'commentId',
+          label: 'Comment ID',
+          type: 'string',
+          defaultValue: commentId,
+          helpText: 'This is the ID of the comment you want to view info for (the relevant ID is filled in automatically).',
+          required: true
         }],
         title: 'View bot comment info',
         description: 'View the version history of a bot comment: which moderators made which changes at which point in time? It gets sent to you in a private message.',
@@ -612,13 +608,6 @@ menu.post('/apply-rule', async (c) => {
       name: 'applyRule',
       form: {
         fields: [{
-          name: 'postId',
-          label: 'Post ID',
-          type: 'string',
-          defaultValue: postId.slice(3),
-          helpText: 'This is the ID of the post you want to apply a rule to (the relevant ID is filled in automatically).'
-        },
-        {
           name: 'rule',
           label: 'Rule',
           type: 'select',
@@ -627,6 +616,13 @@ menu.post('/apply-rule', async (c) => {
             { label: 'Political rule', value: 'political' }
           ],
           helpText: 'Select the rule you want to apply to this post.'
+        },
+        {
+          name: 'postId',
+          label: 'Post ID',
+          type: 'string',
+          defaultValue: postId.slice(3),
+          helpText: 'This is the ID of the post you want to apply a rule to (the relevant ID is filled in automatically).'
         }],
         title: 'Apply rule',
         description: "Apply a certain rule to this post. With the selfie rule, it checks if the selfie flair is applied, if it is spoiled and if it is posted on the correct day. With the political rule, it checks if the political flair is applied and if it is spoiled. It doesn't check other aspects of these rules.",
