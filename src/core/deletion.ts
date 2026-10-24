@@ -166,7 +166,7 @@ export async function handleCleanup(): Promise<boolean> {
 
 		while (true) {
 			if (!await taskScheduler.startNextTask()) { return false; }
-			const postToDelete = (await redis.zRange(`late-deleted-posts-v${dbVersion}`, currentPostScore, endPostScore, { by: 'score' }))[0];
+			const postToDelete = (await redis.zRange(`late-deleted-post-queue-v${dbVersion}`, currentPostScore, endPostScore, { by: 'score' }))[0];
 			if (postToDelete == undefined) {
 				currentTask = 'early-posts-0';
 				await redis.set(`background-task-tracker-v${dbVersion}`, currentTask);
@@ -177,13 +177,13 @@ export async function handleCleanup(): Promise<boolean> {
 
 			if (!isPostDeleted(await reddit.getPostById(postId as T3))) {
 				console.log(`${getDateTime()}: Post ${postId} is no longer deleted, removing from late-deleted-posts queue`);
-				await redis.zRem(`late-deleted-posts-v${dbVersion}`, [postId]);
+				await redis.zRem(`late-deleted-post-queue-v${dbVersion}`, [postId]);
 				continue;
 			}
 
 			console.log(`${getDateTime()}: Cleaning up late deleted post ${postId} from the database`);
 			const postData = await redis.get(`post-info-${postId}-v${dbVersion}`);
-			if (postData == undefined) { await redis.zRem(`late-deleted-posts-v${dbVersion}`, [postId]); continue; }
+			if (postData == undefined) { await redis.zRem(`late-deleted-post-queue-v${dbVersion}`, [postId]); continue; }
 			const authorName = JSON.parse(postData).authorName;
 			const nPostsByUser = await redis.zCard(`posts-of-${authorName}-v${dbVersion}`);
 			const postInPosts = await redis.zScore(`posts-of-${authorName}-v${dbVersion}`, postId) != undefined;
@@ -192,7 +192,7 @@ export async function handleCleanup(): Promise<boolean> {
 
 			if (nPostsByUser == 0 || (nPostsByUser == 1 && postInPosts)) { await removeUserInfo(authorName); }
 
-			await redis.zRem(`late-deleted-posts-v${dbVersion}`, [postId]);
+			await redis.zRem(`late-deleted-post-queue-v${dbVersion}`, [postId]);
 			await redis.set(`background-task-tracker-v${dbVersion}`, `late-posts-${postToDelete['score']}`);
 		}
 	}
