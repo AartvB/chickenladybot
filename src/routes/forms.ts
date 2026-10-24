@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import type { T1, T3, UiResponse } from '@devvit/web/shared';
-import { context, reddit, redis } from '@devvit/web/server';
-import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown, addToEndOfQueue, getDateTime, botExplainer } from '../core/helpers';
-import { addPostToDatabase } from '../core/counting';
+import { context, reddit, redis, settings } from '@devvit/web/server';
+import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown, addToEndOfQueue, getDateTime, botExplainer, remindModsAboutMissingSettings } from '../core/helpers';
+import { addPostToDatabase, removePost } from '../core/counting';
 import { removePostFromDatabase } from '../core/deletion';
 
 export const forms = new Hono();
@@ -393,27 +393,145 @@ forms.post('/view-bot-comment-info', async (c) => {
 
 forms.post('/change-settings', async (c) => {
   console.log(`${getDateTime()}: Received request to change settings.`);
-  const values = await c.req.json<{multiplePostsPerDayReasonId: string, wrongTitleReasonId: string}>();
+  const values = await c.req.json<{multiplePostsPerDayReasonId: string, wrongTitleReasonId: string, selfieRemovalReasonId: string, selfieFlairId: string, politicalFlairId: string}>();
   const multiplePostsPerDayReasonId = Array.isArray(values.multiplePostsPerDayReasonId) ? values.multiplePostsPerDayReasonId[0] : values.multiplePostsPerDayReasonId;
   const wrongTitleReasonId = Array.isArray(values.wrongTitleReasonId) ? values.wrongTitleReasonId[0] : values.wrongTitleReasonId;
+  const selfieRemovalReasonId = Array.isArray(values.selfieRemovalReasonId) ? values.selfieRemovalReasonId[0] : values.selfieRemovalReasonId;
+  const selfieFlairId = Array.isArray(values.selfieFlairId) ? values.selfieFlairId[0] : values.selfieFlairId;
+  const politicalFlairId = Array.isArray(values.politicalFlairId) ? values.politicalFlairId[0] : values.politicalFlairId;
+  if (!multiplePostsPerDayReasonId || !wrongTitleReasonId || !selfieRemovalReasonId || !selfieFlairId || !politicalFlairId) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
   const subreddit = await reddit.getCurrentSubreddit();
+
   let removalReasons = await subreddit.getRemovalReasons();
   removalReasons.push({ id: 'none', title: 'None', message: 'None' });
+  const rawFlairs = await subreddit.getPostFlairTemplates();
+  let flairs: { label: string, value: string }[] = [];
+  for (const flair of rawFlairs) { flairs.push({ value: flair.id, label: flair.text }); }
+  flairs.push({ value: 'none', label: 'None' });
 
   if (!removalReasons.some(reason => reason.id == multiplePostsPerDayReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for multiple posts per day. Please try again.',}, 200); }
   if (!removalReasons.some(reason => reason.id == wrongTitleReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for wrong title. Please try again.',}, 200); }
+  if (!removalReasons.some(reason => reason.id == selfieRemovalReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for selfie rule. Please try again.',}, 200); }
+  if (!flairs.some(flair => flair.value == selfieFlairId)) { return c.json<UiResponse>({ showToast: 'Invalid flair ID for selfie. Please try again.',}, 200); }
+  if (!flairs.some(flair => flair.value == politicalFlairId)) { return c.json<UiResponse>({ showToast: 'Invalid flair ID for political. Please try again.',}, 200); }
 
   if (multiplePostsPerDayReasonId == 'none') { await redis.del(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`); }
   else { await redis.set(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`, multiplePostsPerDayReasonId); }  
   if (wrongTitleReasonId == 'none') { await redis.del(`wrong-title-removal-reason-id-v${await DBVersion()}`); }
   else { await redis.set(`wrong-title-removal-reason-id-v${await DBVersion()}`, wrongTitleReasonId); }
+  if (selfieRemovalReasonId == 'none') { await redis.del(`selfie-removal-reason-id-v${await DBVersion()}`); }
+  else { await redis.set(`selfie-removal-reason-id-v${await DBVersion()}`, selfieRemovalReasonId); }
+  if (selfieFlairId == 'none') { await redis.del(`selfie-flair-id-v${await DBVersion()}`); }
+  else { await redis.set(`selfie-flair-id-v${await DBVersion()}`, selfieFlairId); }
+  if (politicalFlairId == 'none') { await redis.del(`political-flair-id-v${await DBVersion()}`); }
+  else { await redis.set(`political-flair-id-v${await DBVersion()}`, politicalFlairId); }
 
-  if (multiplePostsPerDayReasonId != 'none' && wrongTitleReasonId != 'none') { await redis.del(`last-notification-missing-removal-reasons-v${await DBVersion()}`); }
+  if (multiplePostsPerDayReasonId != 'none' && wrongTitleReasonId != 'none' && selfieRemovalReasonId != 'none' && selfieFlairId != 'none' && politicalFlairId != 'none') { await redis.del(`last-notification-time-missing-setting-v${await DBVersion()}`); }
 
-  console.log(`${getDateTime()}: Settings updated: multiplePostsPerDayReasonId=${multiplePostsPerDayReasonId}, wrongTitleReasonId=${wrongTitleReasonId}`);
+  console.log(`${getDateTime()}: Settings updated: multiplePostsPerDayReasonId=${multiplePostsPerDayReasonId}, wrongTitleReasonId=${wrongTitleReasonId}, selfieRemovalReasonId=${selfieRemovalReasonId}, selfieFlairId=${selfieFlairId}, politicalFlairId=${politicalFlairId}`);
   return c.json<UiResponse>({ showToast: 'Settings updated successfully.' }, 200);
 });
 
+forms.post('/apply-rule', async (c) => {
+  console.log(`${getDateTime()}: Received request to apply a rule to a post.`);
+  const values = await c.req.json<{postId: string, rule: string}>();
+  const postId = `t3_${values.postId}`;
+  const rule = values.rule;
+  let post;
+  try { post = await reddit.getPostById(postId as T3); }
+  catch (e) { return c.json<UiResponse>({ showToast: 'Invalid post ID provided. Please try again.',}, 200); }
+  if (post.subredditName != context.subredditName) { return c.json<UiResponse>({ showToast: 'The provided post ID is not in the correct subreddit. Please try again.',}, 200); }
+
+  if (rule != 'selfie' && rule != 'political') { return c.json<UiResponse>({ showToast: 'Invalid rule provided. Please try again.',}, 200); }
+  if (rule == 'selfie') {
+    const modNoteText = 'Had to be reminded of selfie rules.';
+    const timestamp = post.createdAt.getTime();
+    let isWeekend = false;
+    for (const timeZone of Intl.supportedValuesOf('timeZone')) {
+      const date = new Date(timestamp);
+      const dayOfWeek = date.toLocaleString('en-US', { timeZone: timeZone, weekday: 'long' });
+      if (dayOfWeek == 'Friday' || dayOfWeek == 'Saturday' || dayOfWeek == 'Sunday') {
+        isWeekend = true;
+        break;
+      }
+    }
+
+    if (!isWeekend) {
+      await removePost(postId as T3, 'This post has been removed because selfies may only be posted on friday, saturday, or sunday.', 'selfie');
+      return c.json<UiResponse>({ showToast: 'The selfie wasn\'t posted on a friday, saturday, or sunday. The post has been removed.',}, 200);
+    }
+
+    const selfieFlairId = await redis.get(`selfie-flair-id-v${await DBVersion()}`);
+    if (!selfieFlairId) {
+      await remindModsAboutMissingSettings(`The bot tried to apply a selfie flair to a post but was unable to find the correct flair. Consider adding flairs to the bot settings. This can be done by going to the bot settings in the subreddit menu and selecting the appropriate flairs.`, 'Missing flair');
+      return c.json<UiResponse>({ showToast: 'Selfie flair ID is not set. Please set it in the settings first.',}, 200);
+    }
+    const flair = post.flair;
+    const isSelfieFlair = flair?.templateId == selfieFlairId;
+    const isSpoiled = post.isSpoiler();
+
+    if (!isSelfieFlair) { await reddit.setPostFlair({subredditName: context.subredditName, postId: postId as T3, flairTemplateId: selfieFlairId}); }
+    if (!isSpoiled) { await post.markAsSpoiler(); }
+
+    if (!isSelfieFlair || !isSpoiled) {
+      const modNotes = await reddit.getModNotes({subreddit: context.subredditName, user: post.authorName, filter: 'NOTE'}).all();
+      let nReminders = 0;
+      for await (const note of modNotes) { if (note.userNote?.note == modNoteText) { nReminders++; } }
+      let nAllowedReminders = await settings.get('nAllowedSelfieRuleBreaks');
+      if (typeof nAllowedReminders != 'number') { nAllowedReminders = 2; }      
+      if (nReminders >= nAllowedReminders) {
+        await removePost(postId as T3, 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. This has happened ' + nAllowedReminders + ' or more times in the past as well with your posts, therefore this post was removed.', 'selfie');
+        return c.json<UiResponse>({ showToast: 'This user broke selfie rules ' + nAllowedReminders + ' or more times in the past, so their post was removed.',}, 200);
+      }
+
+      const comment = await post.addComment({text: 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the selfie rules in the future.'+await botExplainer(), runAs: 'APP'});
+      comment.distinguish(true);
+      post.approve();
+      console.log(modNotes);
+      await reddit.addModNote({subreddit: context.subredditName, user: post.authorName, note: modNoteText});
+      return c.json<UiResponse>({ showToast: 'The post has been flaired as a selfie and marked as a spoiler.',}, 200);
+    }
+    post.approve();
+    return c.json<UiResponse>({ showToast: 'The post already follows all selfie rules I can check.',}, 200);
+  }
+  if (rule == 'political') {
+    const modNoteText = 'Had to be reminded of political posts rules.';
+
+    const politicalFlairId = await redis.get(`political-flair-id-v${await DBVersion()}`);
+    if (!politicalFlairId) {
+      await remindModsAboutMissingSettings(`The bot tried to apply a political flair to a post but was unable to find the correct flair. Consider adding flairs to the bot settings. This can be done by going to the bot settings in the subreddit menu and selecting the appropriate flairs.`, 'Missing flair');
+      return c.json<UiResponse>({ showToast: 'Political flair ID is not set. Please set it in the settings first.',}, 200);
+    }
+    const flair = post.flair;
+    const isPoliticalFlair = flair?.templateId == politicalFlairId;
+    const isSpoiled = post.isSpoiler();
+
+    if (!isPoliticalFlair) { await reddit.setPostFlair({subredditName: context.subredditName, postId: postId as T3, flairTemplateId: politicalFlairId}); }
+    if (!isSpoiled) { await post.markAsSpoiler(); }
+
+    if (!isPoliticalFlair || !isSpoiled) {
+      const modNotes = await reddit.getModNotes({subreddit: context.subredditName, user: post.authorName, filter: 'NOTE'}).all();
+      let nReminders = 0;
+      for await (const note of modNotes) { if (note.userNote?.note == modNoteText) { nReminders++; } }
+      let nAllowedReminders = await settings.get('nAllowedPoliticalRuleBreaks');
+      if (typeof nAllowedReminders != 'number') { nAllowedReminders = 4; }
+      if (nReminders >= nAllowedReminders) {
+        await removePost(postId as T3, 'This post didn\'t have the political flair and/or was not marked as a spoiler. This has happened ' + nAllowedReminders + ' or more times in the past as well with your posts, therefore this post was removed.', 'political');
+        return c.json<UiResponse>({ showToast: 'This user broke political rules ' + nAllowedReminders + ' or more times in the past, so their post was removed.',}, 200);
+      }
+
+      const comment = await post.addComment({text: 'This post didn\'t have the political flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the political rules in the future.'+await botExplainer(), runAs: 'APP'});
+      comment.distinguish(true);
+      post.approve();
+      console.log(modNotes);
+      await reddit.addModNote({subreddit: context.subredditName, user: post.authorName, note: modNoteText});
+      return c.json<UiResponse>({ showToast: 'The post has been flaired as a political and marked as a spoiler.',}, 200);
+    }
+    post.approve();
+    return c.json<UiResponse>({ showToast: 'The post already follows all political rules I can check.',}, 200);
+  }
+});
+  
 forms.post('/view-streak-development', async (c) => {  
   console.log(`${getDateTime()}: Received request to view streak development.`);
   const dbVersion = await DBVersion();

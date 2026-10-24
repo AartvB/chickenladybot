@@ -1,4 +1,4 @@
-import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown } from './helpers';
+import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown, remindModsAboutMissingSettings } from './helpers';
 import { context, reddit, settings } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
@@ -57,7 +57,7 @@ export async function addRecentPostsToDatabase(nPosts: number = 1000): Promise<b
   return true
 }
 
-async function removePost(postId: T3, commentText: string, reason?: string) {
+export async function removePost(postId: T3, commentText: string, reason?: string) {
   console.log(`${getDateTime()}: Removing post ${postId}`);
   const postInfo = await reddit.getPostById(postId);
   let message = commentText;
@@ -71,24 +71,18 @@ async function removePost(postId: T3, commentText: string, reason?: string) {
   await reddit.remove(postId, false);
 
   if (reason) {
-    if (reason == 'title' || reason == 'days') {
+    if (reason == 'title' || reason == 'days' || reason == 'selfie') {
       let removalReasonId = undefined;
       if (reason == 'title') { removalReasonId = await redis.get(`wrong-title-removal-reason-id-v${await DBVersion()}`); }
       else if (reason == 'days') { removalReasonId = await redis.get(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`); }
-      if (removalReasonId == undefined) {
-        const daysBetweenRemovalReasonReminders = await settings.get('daysBetweenRemovalReasonReminders');
-        if (typeof daysBetweenRemovalReasonReminders == 'number') {
-          const lastRemovalReasonReminderTime = await redis.get(`last-notification-time-missing-removal-reasons-v${await DBVersion()}`);
-          if (lastRemovalReasonReminderTime == undefined || Date.now() - parseInt(lastRemovalReasonReminderTime) > daysBetweenRemovalReasonReminders * 24 * 60 * 60 * 1000) {
-            await reddit.modMail.createConversation({body: `The bot has removed a post but was unable to add a removal reason. Consider adding removal reasons to the bot settings. This can be done by going to the bot settings in the subreddit menu and selecting the appropriate removal reasons.`, subject: 'Missing removal reason', subredditName: context.subredditName});
-            await redis.set(`last-notification-time-missing-removal-reasons-v${await DBVersion()}`, Date.now().toString());
-            console.log(`${getDateTime()}: Sent modmail notification about missing removal reasons.`);
-          }
-        }
-      }
+      else if (reason == 'selfie') { removalReasonId = await redis.get(`selfie-removal-reason-id-v${await DBVersion()}`); }
+      if (removalReasonId == undefined) { await remindModsAboutMissingSettings(`The bot has removed a post but was unable to add a removal reason. Consider adding removal reasons to the bot settings. This can be done by going to the bot settings in the subreddit menu and selecting the appropriate removal reasons.`, 'Missing removal reason'); }
       else {
         const post = await reddit.getPostById(postId);
-        const modNote = reason == 'title' ? 'Post removed by bot because it had the wrong title.' : 'Post removed by bot because the user posted multiple times per day.';
+        let modNote = '';
+        if (reason == 'title') { modNote = 'Post removed by bot because it had the wrong title.'; }
+        else if (reason == 'days') { modNote = 'Post removed by bot because the user posted multiple times per day.'; }
+        else if (reason == 'selfie') { modNote = 'Post removed by bot because selfie was posted on the wrong day.'; }
         await post.addRemovalNote({reasonId: removalReasonId, modNote: modNote});
       }
     }

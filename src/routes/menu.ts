@@ -531,12 +531,24 @@ menu.post('/view-bot-comment-info', async (c) => {
 menu.post('/change-settings', async (c) => {
   // Allows a mod to change the settings of the bot
   const subreddit = await reddit.getCurrentSubreddit();
+
   let removalReasons = await subreddit.getRemovalReasons();
   removalReasons.push({ id: 'none', title: 'None', message: 'None' });
   let defaultMultiplePostsPerDayReasonId = await redis.get(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`) ?? 'none';
   if (!removalReasons.some((reason) => reason.id == defaultMultiplePostsPerDayReasonId)) { defaultMultiplePostsPerDayReasonId = 'none'; }
   let defaultWrongTitleReasonId = await redis.get(`wrong-title-removal-reason-id-v${await DBVersion()}`) ?? 'none';
   if (!removalReasons.some((reason) => reason.id == defaultWrongTitleReasonId)) { defaultWrongTitleReasonId = 'none'; }
+  let defaultSelfieRemovalReasonId = await redis.get(`selfie-removal-reason-id-v${await DBVersion()}`) ?? 'none';
+  if (!removalReasons.some((reason) => reason.id == defaultSelfieRemovalReasonId)) { defaultSelfieRemovalReasonId = 'none'; }
+
+  const rawFlairs = await subreddit.getPostFlairTemplates();
+  let flairs: { label: string, value: string }[] = [];
+  for (const flair of rawFlairs) { flairs.push({ value: flair.id, label: flair.text }); }
+  flairs.push({ value: 'none', label: 'None' });
+  let defaultSelfieFlairId = await redis.get(`selfie-flair-id-v${await DBVersion()}`) ?? 'none';
+  if (!flairs.some((flair) => flair.value == defaultSelfieFlairId)) { defaultSelfieFlairId = 'none'; }
+  let defaultPoliticalFlairId = await redis.get(`political-flair-id-v${await DBVersion()}`) ?? 'none';
+  if (!flairs.some((flair) => flair.value == defaultPoliticalFlairId)) { defaultPoliticalFlairId = 'none'; }
   return c.json<UiResponse>({
     showForm: {
       name: 'changeSettings',
@@ -556,10 +568,69 @@ menu.post('/change-settings', async (c) => {
           options: removalReasons.map((reason) => ({ label: reason.title, value: reason.id })),
           helpText: 'Select the removal reason that will be used when a user posts with the wrong title.',
           defaultValue: [defaultWrongTitleReasonId]
+        },
+        {
+          name: 'selfieRemovalReasonId',
+          label: 'Removal reason for selfie rule',
+          type: 'select',
+          options: removalReasons.map((reason) => ({ label: reason.title, value: reason.id })),
+          helpText: 'Select the removal reason that will be used when a user breaks the selfie rule.',
+          defaultValue: [defaultSelfieRemovalReasonId]      
+        },
+        {
+          name: 'selfieFlairId',
+          label: 'Selfie flair',
+          type: 'select',
+          options: flairs.map((flair) => ({ label: flair.label, value: flair.value })),
+          helpText: 'Select the flair that is used to mark a post as a selfie.',
+          defaultValue: [defaultSelfieFlairId]
+        },
+        {
+          name: 'politicalFlairId',
+          label: 'Political flair',
+          type: 'select',
+          options: flairs.map((flair) => ({ label: flair.label, value: flair.value })),
+          helpText: 'Select the flair that is used to mark a post as political.',
+          defaultValue: [defaultPoliticalFlairId]
         }],
         title: 'Change settings',
         description: 'Change some settings of the bot for this subreddit.',
         acceptLabel: 'Change settings',
+        cancelLabel: 'Cancel'
+      },
+    },
+  }, 200);
+});
+
+menu.post('/apply-rule', async (c) => {
+  // Allows a mod to apply a certain rule to a post
+  const values = await c.req.json<{targetId?: string}>();
+  const postId = values.targetId;
+  if (postId == undefined) { return c.json<UiResponse>({ showToast: 'Post info not found',}, 200); }
+  return c.json<UiResponse>({
+    showForm: {
+      name: 'applyRule',
+      form: {
+        fields: [{
+          name: 'postId',
+          label: 'Post ID',
+          type: 'string',
+          defaultValue: postId.slice(3),
+          helpText: 'This is the ID of the post you want to apply a rule to (the relevant ID is filled in automatically).'
+        },
+        {
+          name: 'rule',
+          label: 'Rule',
+          type: 'select',
+          options: [
+            { label: 'Selfie rule', value: 'selfie' },
+            { label: 'Political rule', value: 'political' }
+          ],
+          helpText: 'Select the rule you want to apply to this post.'
+        }],
+        title: 'Apply rule',
+        description: "Apply a certain rule to this post. With the selfie rule, it checks if the selfie flair is applied, if it is spoiled and if it is posted on the correct day. With the political rule, it checks if the political flair is applied and if it is spoiled. It doesn't check other aspects of these rules.",
+        acceptLabel: 'Apply rule',
         cancelLabel: 'Cancel'
       },
     },

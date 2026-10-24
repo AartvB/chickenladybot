@@ -1,6 +1,6 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
-import { context, reddit } from '@devvit/web/server';
+import { context, reddit, settings } from '@devvit/web/server';
 import { Post } from '@devvit/web/server';
 import originalDatabase from '../core/original_database.json';
 
@@ -89,6 +89,18 @@ export class TaskScheduler {
     const totalProcessingTime = Date.now() - this.startTime;
     const timeLeft = this.maxTime - totalProcessingTime;
     return timeLeft < processingTime * this.multiplier || timeLeft < this.timeToStop;
+  }
+}
+
+export async function remindModsAboutMissingSettings(errorString: string, subject: string) {
+  const daysBetweenMissingSettingsReminders = await settings.get('daysBetweenMissingSettingsReminders');
+  if (typeof daysBetweenMissingSettingsReminders == 'number') {
+    const lastRemovalReasonReminderTime = await redis.get(`last-notification-time-missing-setting-v${await DBVersion()}`);
+    if (lastRemovalReasonReminderTime == undefined || Date.now() - parseInt(lastRemovalReasonReminderTime) > daysBetweenMissingSettingsReminders * 24 * 60 * 60 * 1000) {
+      await reddit.modMail.createConversation({body: errorString, subject: subject, subredditName: context.subredditName});
+      await redis.set(`last-notification-time-missing-setting-v${await DBVersion()}`, Date.now().toString());
+      console.log(`${getDateTime()}: Sent modmail notification about missing settings.`);
+    }
   }
 }
 

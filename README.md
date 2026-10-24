@@ -17,6 +17,7 @@ This code is shared to give people insight in how this bot works. You are free t
 - Edit bot post: If a moderator posted using the bot account, the post can be edited by a moderator.
 - View bot post info: Allows moderator to see which moderators created and edited the bot posts, and what edits they made.
 - Comment as bot: Allows moderators to comment to a post using the bot account.
+- Apply rule: Allows moderators to check certain rules and automatically fix or remove the posts, as well as adding a moderator note to the user.
 
 ### Comment usecases
 - Edit bot comment: If a moderator commented using the bot account, the comment can be edited by a moderator.

@@ -24,10 +24,20 @@
       }
     },
     "subreddit": {
-      "daysBetweenRemovalReasonReminders": {
+      "daysBetweenMissingSettingsReminders": {
         "type": "number",
         "label": "Days between reminders if removal reasons are missing.",
         "defaultValue": 7
+      },
+      "nAllowedSelfieRuleBreaks": {
+        "type": "number",
+        "label": "Number of allowed selfie rule breaks before a post is removed.",
+        "defaultValue": 2
+      },
+      "nAllowedPoliticalRuleBreaks": {
+        "type": "number",
+        "label": "Number of allowed political rule breaks before a post is removed.",
+        "defaultValue": 4
       }
     }
   },
@@ -123,6 +133,13 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/change-settings"
+      },
+      {
+        "label": "Apply rule",
+        "description": "Apply a certain rule to this post.",
+        "location": "post",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/apply-rule"
       }
     ]
   },
@@ -141,7 +158,8 @@
     "commentAsBot": "/internal/form/comment-as-bot",
     "editBotComment": "/internal/form/edit-bot-comment",
     "viewBotCommentInfo": "/internal/form/view-bot-comment-info",
-    "changeSettings": "/internal/form/change-settings"
+    "changeSettings": "/internal/form/change-settings",
+    "applyRule": "/internal/form/apply-rule"
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",
