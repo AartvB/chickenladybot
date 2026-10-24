@@ -1,5 +1,5 @@
 import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown, remindModsAboutMissingSettings } from './helpers';
-import { context, reddit, settings } from '@devvit/web/server';
+import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
 
