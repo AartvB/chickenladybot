@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { T1, T3, UiResponse } from '@devvit/web/shared';
-import { addToEndOfQueue, DBVersion, formatDateTime, isInHardShutdown, isInSoftShutdown } from '../core/helpers';
+import { DBVersion, isInHardShutdown, isInSoftShutdown, viewPostWindow } from '../core/helpers';
 import { reddit, redis } from '@devvit/web/server';
 
 export const menu = new Hono();
@@ -500,6 +500,9 @@ menu.post('/change-settings', async (c) => {
   if (!flairs.some((flair) => flair.value == defaultSelfieFlairId)) { defaultSelfieFlairId = 'none'; }
   let defaultPoliticalFlairId = await redis.get(`political-flair-id-v${await DBVersion()}`) ?? 'none';
   if (!flairs.some((flair) => flair.value == defaultPoliticalFlairId)) { defaultPoliticalFlairId = 'none'; }
+
+  const nSubscribers = await redis.zCard(`subscriptions-v${await DBVersion()}`);
+
   return c.json<UiResponse>({
     showForm: {
       name: 'changeSettings',
@@ -545,7 +548,7 @@ menu.post('/change-settings', async (c) => {
           defaultValue: [defaultPoliticalFlairId]
         }],
         title: 'Change settings',
-        description: 'Change some settings of the bot for this subreddit.',
+        description: `Change some settings of the bot for this subreddit. There ${nSubscribers == 1 ? 'is currently 1 subscriber' : `are currently ${nSubscribers} subscribers`} to streak notifications.`,
         acceptLabel: 'Change settings',
         cancelLabel: 'Cancel'
       },
@@ -592,30 +595,19 @@ menu.post('/view-post-window', async (c) => {
   // Allows a user to see when they can post again to maintain their streak
   const username = await reddit.getCurrentUsername();
   if (!username) { return c.json<UiResponse>({ showToast: 'You must be logged in to view your post window.',}, 200); }  
-  const startNextPostTimeframe = await redis.zScore(`start-next-post-timeframe-v${await DBVersion()}`, username);
-  const endNextPostTimeframe = await redis.zScore(`end-next-post-timeframe-v${await DBVersion()}`, username);
-  let postWindowMessage = '';
-  if (!startNextPostTimeframe || !endNextPostTimeframe) {
-    postWindowMessage = 'Your next post window could not be determined. This is correct if you have not posted yet, or if your streak is 0, because then you have no streak to maintain. Otherwise, I will try to determine it again now. If you try again in 1 minute and it still does not work, you have to wait until you made a new post.';
-    const latestPost = await redis.zRange(`posts-of-${username}-v${await DBVersion()}`, -1, -1);
-    if (latestPost[0] != undefined) { await addToEndOfQueue(`streak-queue-v${await DBVersion()}`, latestPost[0].member); }
-  }
-  else {
-    const now = new Date().valueOf();
-    if (endNextPostTimeframe < now) { postWindowMessage = 'Your next post window has already passed. You can post again to start building a new streak.'; }
-    else {
-      if (startNextPostTimeframe > now) { postWindowMessage += `You can create your next post in ${formatDateTime(startNextPostTimeframe - now)} from now to maintain your streak.`; }
-      else { postWindowMessage += 'You can create your next post now to maintain your streak.'; }
-      postWindowMessage += ` Do not create it later than ${formatDateTime(endNextPostTimeframe - now)} from now. Otherwise, you will lose your streak.`;      
-    }
-  }
   return c.json<UiResponse>({
     showForm: {
       name: 'viewPostWindow',
       form: {
-        fields: [],
+        fields: [{
+          name: 'subscribe',
+          label: 'Message me when I can post again',
+          type: 'boolean',
+          defaultValue: await redis.zScore(`subscriptions-v${await DBVersion()}`, username) ? true : false,
+          helpText: 'If checked, you will be notified when it is time to post again. Unchecking this box will unsubscribe you from these notifications.'
+        }],
         title: 'View post window',
-        description: postWindowMessage,
+        description: await viewPostWindow(username),
         acceptLabel: 'Confirm',
         cancelLabel: 'Cancel'
       },

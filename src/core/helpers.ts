@@ -24,6 +24,48 @@ export async function addToEndOfQueue(queueName: string, text: string): Promise<
   return maxScore+1;
 }
 
+export async function addSubscription(username: string): Promise<void> {
+  await addToEndOfQueue(`subscriptions-v${await DBVersion()}`, username);
+  const latestPost = await redis.zRange(`posts-of-${username}-v${await DBVersion()}`, -1, -1);
+  if (latestPost[0] != undefined) { await addToEndOfQueue(`streak-queue-v${await DBVersion()}`, latestPost[0].member); }
+  console.log(`${getDateTime()}: u/${username} subscribed to post window notifications.`);
+}
+export async function removeSubscription(username: string): Promise<void> {
+  await redis.zRem(`subscriptions-v${await DBVersion()}`, [username]);
+  await removeNotifications(username);
+  console.log(`${getDateTime()}: u/${username} unsubscribed from post window notifications.`);
+}
+export async function removeNotifications(username: string): Promise<void> {
+  await redis.zRem(`first-notifications-list-v${await DBVersion()}`, [username]);
+  await redis.zRem(`second-notifications-list-v${await DBVersion()}`, [username]);
+  await redis.zRem(`untimed-notifications-list-v${await DBVersion()}`, [username]);
+}
+export async function viewPostWindow(username: string): Promise<string> {
+  console.log(`${getDateTime()}: u/${username} is viewing their post window.`);
+  const startNextPostTimeframe = await redis.zScore(`start-next-post-timeframe-v${await DBVersion()}`, username);
+  const endNextPostTimeframe = await redis.zScore(`end-next-post-timeframe-v${await DBVersion()}`, username);
+  let postWindowMessage = '';
+  if (!startNextPostTimeframe || !endNextPostTimeframe) {
+    const currentStreak = await redis.zScore(`current-streaks-v${await DBVersion()}`, username) ?? 0;
+    if (currentStreak == 0) { postWindowMessage = 'You currently have no streak. Make a new post to start building one!'; }
+    else {
+      postWindowMessage = 'Your next post window could not be determined. This is correct if you have not posted yet, or if your streak is 0, because then you have no streak to maintain. Otherwise, I will try to determine it again now. If you try again in 20 seconds and it still does not work, you have to wait until you made a new post.';
+      const latestPost = await redis.zRange(`posts-of-${username}-v${await DBVersion()}`, -1, -1);
+      if (latestPost[0] != undefined) { await addToEndOfQueue(`streak-queue-v${await DBVersion()}`, latestPost[0].member); }
+    }
+  }
+  else {
+    const now = new Date().valueOf();
+    if (endNextPostTimeframe < now) { postWindowMessage = 'Your next post window has already passed. You can post again to start building a new streak.'; }
+    else {
+      if (startNextPostTimeframe > now) { postWindowMessage += `You can create your next post in ${formatDateTime(startNextPostTimeframe - now)} from now to maintain your streak.`; }
+      else { postWindowMessage += 'You can create your next post now to maintain your streak.'; }
+      postWindowMessage += ` Do not create it later than ${formatDateTime(endNextPostTimeframe - now)} from now. Otherwise, you will lose your streak.`;      
+    }
+  }
+  return postWindowMessage;
+}
+
 export async function updateTargetPost() {
   // Update the post that tells the user what the correct next number is.
   const dbVersion = await DBVersion();

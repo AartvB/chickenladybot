@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
 import { reddit, redis } from '@devvit/web/server';
-import { addToEndOfQueue, botExplainer, DBVersion, formatDateTime, isPostDeletedEarly, updateTargetPost } from '../core/helpers';
+import { addSubscription, addToEndOfQueue, botExplainer, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, updateTargetPost, viewPostWindow } from '../core/helpers';
   
 export const triggers = new Hono();
 
@@ -91,6 +91,30 @@ triggers.post('/on-post-delete', async (c) => {
     message += await botExplainer();
     const comment = await reddit.submitComment({id: postId as T3, text: message, runAs: 'APP'});
     await comment.distinguish(true);
+  }
+
+  return c.json<TriggerResponse>({status: 'success',}, 200);
+});
+
+triggers.post('/on-comment-create', async (c) => {
+  const input = await c.req.json();
+  const username = input.author.name;
+  const comment = await reddit.getCommentById(input.comment.id);
+  if (!username || !comment) { return c.json<TriggerResponse>({status: 'success',}, 200); }
+  const body = comment.body;
+  if (body.toLowerCase().includes('!unsubscribe')) {
+    await removeSubscription(username);
+    const reply = await comment.reply({text: `You have been unsubscribed from streak notifications. You will no longer receive notifications about your streak.${await botExplainer()}`, runAs: 'APP'});
+    reply.distinguish(false);
+  }
+  else if (body.toLowerCase().includes('!subscribe')) {
+    await addSubscription(username);
+    const reply = await comment.reply({text: `You have been subscribed to streak notifications. You will now receive notifications about your streak.${await botExplainer()}`, runAs: 'APP'});
+    reply.distinguish(false);
+  }
+  else if (body.toLowerCase().includes('!viewpostwindow')) {
+    const reply = await comment.reply({text: await viewPostWindow(username)+await botExplainer(), runAs: 'APP'});
+    reply.distinguish(false);
   }
 
   return c.json<TriggerResponse>({status: 'success',}, 200);

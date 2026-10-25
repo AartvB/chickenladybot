@@ -8,7 +8,6 @@ This code is shared to give people insight in how this bot works. You are free t
 - Toggle shutdown: When the bot is having large problems, you can activate a shutdown. For most use-cases, a soft shutdown is enough. This will shut down all bot activity that removes posts. However, if the bot fully needs to stop, such as in the case of a database update, a hard shutdown can be activated.
 - Post as bot: A moderator can make a post using the bot account.
 - Change settings: A moderator can edit bot settings.
-- View post window: A user can see when they should post again to maintain their streak.
 
 ### Post usecases
 - Fix streak. If there is a problem with the streak of a user, the moderator can use this feature to get a report of the streak development of that user, and can use it to fix the problem. It can also be used to add a streak of a user which is carried over from r/CountOnceADay. The Post ID must be the Post ID of the post at r/CountOnceADay.
@@ -21,6 +20,10 @@ This code is shared to give people insight in how this bot works. You are free t
 - Edit bot comment: If a moderator commented using the bot account, the comment can be edited by a moderator.
 - View bot comment info: Allows moderator to see which moderators created and edited the bot comments, and what edits they made.
 - Comment as bot: Allows moderators to comment to a comment using the bot account.
+
+## Usage for users
+### Subreddit usecases
+- View post window: A user can see when they should post again to maintain their streak. Users can also subscribe to streak notifications here.
 
 ## Functionalities
 The bot does the following things:
@@ -36,6 +39,7 @@ The bot does the following things:
 - 5 minutes after a post has been posted on the r/countwithchickenlady subreddit, the post is linked to in the discord server. The 5 minutes delay is to allow people to remove their posts without it automatically appearing in the discord server.
 - If a posts gets an NSFW tag within 21 days after posting, the contents of the posts are obscured in the discord channel, to avoid having NSFW content in the SFW section of the discord server.
 - Once per day, the bot checks all images in the daily-bot-post channel, and posts the image with the highest number of checkmarks to reddit using the ChickenBotOnceADay account. Ties are won by the earlier comment.
+- Users can subscribe to notifications about their streak. The bot will send a notification when the post window opens, and another notification 5 hours before the post window closes. If the post window cannot be determined correctly, an untimed notification will be sent instead, 12 hours after their last post. Subscribing and unsubscribing can be done by commenting !subscribe or !unsubscribe on the sub, by using the menu, or by sending a direct message to the bot with the same commands. The bot also responds to !viewpostwindow, which will show the user when they can post again to maintain their streak.
 
 ## Source
 The source code of the bot can be found here: https://github.com/AartvB/chickenladybot.

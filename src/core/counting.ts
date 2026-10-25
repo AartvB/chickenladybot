@@ -1,4 +1,4 @@
-import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown, remindModsAboutMissingSettings, formatDateTime } from './helpers';
+import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown, remindModsAboutMissingSettings, formatDateTime, removeNotifications } from './helpers';
 import { context, reddit } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
 import { redis } from '@devvit/redis';
@@ -14,6 +14,7 @@ export async function addPostToDatabase(postId: T3, postNumber: number, authorNa
   await redis.zAdd(`posts-of-${authorName}-v${dbVersion}`, { member: postId, score: timestamp });
   await redis.set(`post-info-${postId}-v${dbVersion}`, JSON.stringify({ 'authorName': authorName, 'postNumber': postNumber.toString(), 'date': dateUTC, 'discordMessageId': null }));
   await redis.zAdd(`posts-per-user-v${dbVersion}`, { member: authorName, score: await redis.zCard(`posts-of-${authorName}-v${dbVersion}`) });
+  await removeNotifications(authorName);
 
 	let nZeroes = 1;
   while (true) {

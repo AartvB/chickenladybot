@@ -16,6 +16,10 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **current-COAD-streaks**: Conatins all user ids. The score is their COAD-streak.
 - **start-next-post-timeframe**: Contains all user ids. The score is the earliest timestamp that users can make their next post on to keep their streak going.
 - **end-next-post-timeframe**: Contains all user ids. The score is the latest timestamp that users can make their next post on to keep their streak going.
+- **subscriptions**: Contains all usernames of users that are subscribed to notifications about their streak. Score is an integer, counting up.
+- **first-notifications-list**: Contains all usernames of users that are subscribed to notifications about their streak, and who still need to receive the first notification (when the post window opens). Score is the timestamp when the notification must be sent.
+- **second-notifications-list**: Contains all usernames of users that are subscribed to notifications about their streak, and who still need to receive the second notification (5 hours before the post window closes). Score is the timestamp when the notification must be sent.
+- **untimed-notifications-list**: Contains all usernames of users that are subscribed to notifications about their streak, and who still need to receive the untimed notification (this happens when the notification window cannot be determined correctly). Score is the timestamp when the notification must be sent.
 - **post-streaks**: Contains all post ids. The score is their streak at the point in time of posting that post.
 - **post-COAD-streaks**: Contains all post ids. The score is their COAD-streak at the point in time of posting that post.
 - **top-streaks**: Contains all user ids. The score is the highest streak they ever had.

@@ -150,7 +150,8 @@
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",
     "onAppUpgrade": "/internal/triggers/on-app-upgrade",
-    "onPostDelete": "/internal/triggers/on-post-delete"
+    "onPostDelete": "/internal/triggers/on-post-delete",
+    "onCommentCreate": "/internal/triggers/on-comment-create"
   },
   "scripts": {
     "build": "vite build",

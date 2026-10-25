@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { T1, T3, UiResponse } from '@devvit/web/shared';
 import { context, reddit, redis, settings } from '@devvit/web/server';
-import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown, addToEndOfQueue, getDateTime, botExplainer, remindModsAboutMissingSettings } from '../core/helpers';
+import { DBVersion, updateTargetPost, isInSoftShutdown, isInHardShutdown, addToEndOfQueue, getDateTime, botExplainer, remindModsAboutMissingSettings, addSubscription, removeSubscription } from '../core/helpers';
 import { addPostToDatabase, removePost } from '../core/counting';
 import { removePostFromDatabase } from '../core/deletion';
 import { reportStreakDevelopment } from '../core/streak';
@@ -661,4 +661,11 @@ forms.post('/view-streak-development', async (c) => {
   return c.json<UiResponse>({ showToast: 'Streak development report sent to mod mail. Read it and then come back to this form.',}, 200);
 });
 
-forms.post('/view-post-window', async (c) => { return c.json<UiResponse>({ showToast: 'Your post windows has been displayed' }, 200); });
+forms.post('/view-post-window', async (c) => { 
+  const values = await c.req.json<{subscribe: boolean}>();
+  const username = await reddit.getCurrentUsername();
+  if (username == undefined) { return c.json<UiResponse>({ showToast: 'You must be logged in to view your post window and subscribe to notifications.', }, 200); }
+  if (values.subscribe) { await addSubscription(username); }
+  if (!values.subscribe) { await removeSubscription(username); }
+  return c.json<UiResponse>({ showToast: 'Subscription status updated.' }, 200);
+});
