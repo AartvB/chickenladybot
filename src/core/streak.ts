@@ -380,6 +380,9 @@ export async function reportStreakDevelopment(username: string, timezone: string
   report += 'If there was a special event (such as a user unrightfully being banned, a reddit bug etc.) that caused the streak to be reset, you can add a manual streak to the database by going to the post and choosing to add a manual streak to the streak database.\n\n\n\n';
   report += '# Streak Development\n\n';
   report += 'Below you can find the streak development of the user. If you want to see the streak development in a different timezone, please submit a new request with the desired timezone.\n\n';
+  const currentStreak = await redis.zScore(`current-streaks-v${dbVersion}`, username);
+  const currentCoadStreak = await redis.zScore(`current-COAD-streaks-v${dbVersion}`, username);
+  report += `Current streak: ${currentStreak == undefined ? 'Unknown' : currentStreak}.${currentCoadStreak == undefined ? '' : ` Current streak taken over from COAD: ${currentCoadStreak}` }.\n\n`;
   let modMailConversationId: string | undefined = undefined;
   for (const event of events) {
     let newReport = report + event.event;
