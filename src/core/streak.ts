@@ -372,6 +372,9 @@ export async function reportStreakDevelopment(username: string, timezone: string
     const dateStr = timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: timezone }) : 'Unknown date';
     events.push({ timestamp: timestamp, event: `${dateStr}: Manually added a ${streakSource.source} streak or a post was removed so the post data has been deleted for privacy reasons. Streak: ${streakSource.streak}\n\n` });
   }
+  const streakFixTimestamp = await redis.get(`timestamp-streak-fix-v${dbVersion}`);
+  const streakFixTimestampNumber = streakFixTimestamp ? parseInt(streakFixTimestamp) : undefined;
+  if (streakFixTimestampNumber) { events.push( { timestamp: streakFixTimestampNumber, event: `${new Date(streakFixTimestampNumber).toLocaleString('en-US', { timeZone: timezone })}: At this point in time, a bug in streak calculation was fixed. This might influence streaks after this point in time.\n\n` }); }
   events.sort((a, b) => b.timestamp - a.timestamp);
 
   let report = `A moderator requested a streak development report for user u/${username}.\n\n`;

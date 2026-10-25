@@ -40,11 +40,13 @@ triggers.post('/on-app-upgrade', async (c) => {
   const input = await c.req.json<OnAppUpgradeRequest>();
   console.log('App upgraded in subreddit: r/' + input.subreddit?.name);
 
+  const dbVersion = await redis.get('database-version');
   if (input.subreddit?.name == 'countwithchickenlady') {
-    const dbVersion = await redis.get('database-version');
-    const latestBotDiscordMessageId = await redis.get('latest-bot-discord-message-v' + dbVersion);
-    if (!latestBotDiscordMessageId) { await redis.set('latest-bot-discord-message-v' + dbVersion, '1526346033603281062'); }
+    const latestBotDiscordMessageId = await redis.get(`latest-bot-discord-message-v${dbVersion}`);
+    if (!latestBotDiscordMessageId) { await redis.set(`latest-bot-discord-message-v${dbVersion}`, '1526346033603281062'); }
   }
+  const streakFixTimestamp = await redis.get(`timestamp-streak-fix-v${dbVersion}`);
+  if (!streakFixTimestamp) { await redis.set(`timestamp-streak-fix-v${dbVersion}`, `${Date.now()}`); }
 
   return c.json<TriggerResponse>({status: 'success',},200);
 });

@@ -2,7 +2,7 @@
 
 This file explains the structure of the Redis database for this app
 
-Every key has the addition of '-vx' at the end, with x being a number (so -v1, -v2 etc.). In case something happens with the database, this makes sure restoring the old database doesn't overwrite the new database that is being made.
+Every key has the addition of '-vx' at the end, with x being a number (so -v1, -v2 etc.). In case something happens with the database, this makes sure restoring the old database doesn't overwrite the new database that is being made. The database version is stored in the key 'db-version', the only key that does not have the '-vx' suffix.
 
 ## Sorted sets
 - **users**: Contains all usernames of users that have posted to the sub. Sorted based on time of first post. Score is an integer, counting up.
@@ -33,6 +33,7 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **palindrome-users**: Contains the user ids of users that posted palindrome posts. The score is the number of posts they have in this format.
 
 ## Single values
+- **timestamp-streak-fix**: The timestamp of the time where the streak bug was fixed.
 - **new-post-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single post handler is active at the same time.
 - **streak-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single streak handler is active at the same time.
 - **deleted-post-handler-lock**: Either 'open' or the timestamp when it was locked. Makes sure only a single deleted post handler is active at the same time.
