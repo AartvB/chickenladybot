@@ -1,6 +1,6 @@
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
-import { reddit } from '@devvit/web/server';
+import { reddit, settings } from '@devvit/web/server';
 import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly, getDateTime, formatDateTime } from './helpers';
 
 export async function removePostFromDatabase(postId: T3, early_removal: boolean) {
@@ -71,7 +71,9 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 		await redis.zAdd(`early-deleted-posts-v${dbVersion}`, { member: postId, score: Date.now() });
 		await redis.zRem(`early-deleted-post-queue-v${dbVersion}`, [postId]);
 
-		let message = `This post has been removed by you or a moderator within 10 minutes of posting, or it has been flagged for special deletion because you contacted us through mod mail. Therefore this post does not count as your post for this day and does not contribute to your streak. Feel free to post again.` // TODO: Remove magic number 10
+		let nMinutesUntilPostCounts = await settings.get('nMinutesUntilPostCounts');
+		if (nMinutesUntilPostCounts == undefined || typeof nMinutesUntilPostCounts != 'number') { nMinutesUntilPostCounts = 10; }
+		let message = `This post has been removed by you or a moderator within ${nMinutesUntilPostCounts} minutes of posting, or it has been flagged for special deletion because you contacted us through mod mail. Therefore this post does not count as your post for this day and does not contribute to your streak. Feel free to post again.`
 
 		const post = await reddit.getPostById(postId as T3);
 		if (post) {
@@ -106,19 +108,21 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 	await txn.unwatch();
 }
 export async function handleDeletedPosts() {
-// Handles posts that have been deleted within 10 minutes of posting
+// Handles posts that have been deleted within nMinutesUntilPostCounts (setting) minutes of posting
 // Only removes from the beginning of the queue
 	const taskScheduler = new TaskScheduler({});
 	if (await taskScheduler.endTask()) { return false; }
 	const dbVersion = await DBVersion();
 
-	const tenMinutesAgo = Date.now() - 10 * 60 * 1000; // Remove magic number 10
+	let nMinutesUntilPostCounts = await settings.get('nMinutesUntilPostCounts');
+	if (nMinutesUntilPostCounts == undefined || typeof nMinutesUntilPostCounts != 'number') { nMinutesUntilPostCounts = 10; }
+	const tenMinutesAgo = Date.now() - nMinutesUntilPostCounts * 60 * 1000;
 	const recentPosts = await redis.zRange(`posts-v${dbVersion}`, tenMinutesAgo, '+inf', { by: 'score' });	
 	for (const postInfo of recentPosts) {
 		const postId = postInfo['member'];
 		const post = await reddit.getPostById(postId as T3);
 		if (await isPostDeleted(post) && !(await isPostDeletedEarly(postId as T3))) { 
-			console.log(`${getDateTime()}: Post ${postId} has been deleted within 10 minutes of posting, adding to early-deleted-post-queue`);
+			console.log(`${getDateTime()}: Post ${postId} has been deleted within ${nMinutesUntilPostCounts} minutes of posting, adding to early-deleted-post-queue`);
 			await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId);
 		}
 	}

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
-import { reddit, redis } from '@devvit/web/server';
+import { reddit, redis, settings } from '@devvit/web/server';
 import { addSubscription, addToEndOfQueue, botExplainer, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, updateTargetPost, viewPostWindow } from '../core/helpers';
   
 export const triggers = new Hono();
@@ -50,7 +50,8 @@ triggers.post('/on-app-upgrade', async (c) => {
 });
 
 triggers.post('/on-post-delete', async (c) => {
-  // When a post gets deleted, add it to the early (within 10 minutes) or late (after 10 minutes) queue.
+  // When a post gets deleted, add it to the early (within nMinutesUntilPostCounts minutes) or late (after nMinutesUntilPostCounts minutes) queue. (nMinutesUntilPostCounts in settings, default 10 minutes)
+
   const input = await c.req.json<OnPostDeleteRequest>();
   const dbVersion = await DBVersion();
   const postId = input.postId;
@@ -62,10 +63,13 @@ triggers.post('/on-post-delete', async (c) => {
   if (timestamp_str) { timestamp = new Date(timestamp_str).getTime(); }
   else { timestamp = await redis.zScore(`posts-v${dbVersion}`, postId) || Date.now(); }
 
-  if (timestamp > Date.now() - 10 * 60000) { await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId); } // TODO: Remove magic number 10
+  let nMinutesUntilPostCounts = await settings.get('nMinutesUntilPostCounts');
+  if (nMinutesUntilPostCounts == undefined || typeof nMinutesUntilPostCounts != 'number') { nMinutesUntilPostCounts = 10; }
+
+  if (timestamp > Date.now() - nMinutesUntilPostCounts * 60000) { await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId); }
   else if (!(await isPostDeletedEarly(postId as T3))) { 
     await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, {member: postId, score: Date.now()});
-    let message = `This post has been removed by you or a moderator after 10 minutes of posting it. Therefore this post will still count as your post for this day and keeps contributing to your streak.` // TODO: Remove magic number 10
+    let message = `This post has been removed by you or a moderator after ${nMinutesUntilPostCounts} minutes of posting it. Therefore this post will still count as your post for this day and keeps contributing to your streak.`
 
     const post = await reddit.getPostById(postId as T3)
     if (post) {

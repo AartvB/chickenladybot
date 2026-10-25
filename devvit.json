@@ -38,6 +38,11 @@
         "type": "number",
         "label": "Number of allowed political rule breaks before a post is removed.",
         "defaultValue": 4
+      },
+      "nMinutesUntilPostCounts": {
+        "type": "number",
+        "label": "Number of minutes after which a post still counts towards your streak when it is removed.",
+        "defaultValue": 10
       }
     }
   },

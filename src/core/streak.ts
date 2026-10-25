@@ -1,4 +1,4 @@
-import { context, reddit } from '@devvit/web/server';
+import { context, reddit, settings } from '@devvit/web/server';
 import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime, addSubscription, removeSubscription } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
@@ -344,6 +344,9 @@ export async function reportStreakDevelopment(username: string, timezone: string
   let otherStreakSources = undefined;
   if (otherStreakSourcesStr != undefined) { otherStreakSources = JSON.parse(otherStreakSourcesStr); }
 
+  let nMinutesUntilPostCounts = await settings.get('nMinutesUntilPostCounts');
+  if (nMinutesUntilPostCounts == undefined || typeof nMinutesUntilPostCounts != 'number') { nMinutesUntilPostCounts = 10; }
+
   let events: { timestamp: number, event: string }[] = [];
   for (const postInfo of recentPosts) {
     const postId = postInfo['member'];
@@ -359,9 +362,9 @@ export async function reportStreakDevelopment(username: string, timezone: string
     catch (error) { console.error(`${getDateTime()}: Error fetching post ${postId} for streak development report:`, error); }
 
     const isLateDeleted = await redis.zScore(`late-deleted-post-queue-v${dbVersion}`, postId) != undefined;
-
-    if (streakLength != undefined) { eventText = `${dateStr}: post: [${postTitle}](https://www.reddit.com/r/${context.subredditName}/comments/${postId.slice(3)}). Streak: ${streakLength}.${isLateDeleted ? ' (deleted after more than 10 minutes)' : ''}\n\n`; }
-    else { eventText = `${dateStr}: post: [${postTitle}](https://www.reddit.com/r/${context.subredditName}/comments/${postId.slice(3)}). Streak: Unknown.${isLateDeleted ? ' (deleted after more than 10 minutes)' : ''}\n\n`; }
+  
+    if (streakLength != undefined) { eventText = `${dateStr}: post: [${postTitle}](https://www.reddit.com/r/${context.subredditName}/comments/${postId.slice(3)}). Streak: ${streakLength}.${isLateDeleted ? ` (deleted after more than ${nMinutesUntilPostCounts} minutes)` : ''}\n\n`; }
+    else { eventText = `${dateStr}: post: [${postTitle}](https://www.reddit.com/r/${context.subredditName}/comments/${postId.slice(3)}). Streak: Unknown.${isLateDeleted ? ` (deleted after more than ${nMinutesUntilPostCounts} minutes)` : ''}\n\n`; }
     events.push({ timestamp: timestamp, event: eventText });
   }
   for (const streakSource of otherStreakSources ?? []) {
