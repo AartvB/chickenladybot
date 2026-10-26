@@ -22,7 +22,7 @@ Automated actions may occasionally be incorrect. Community moderators remain res
 
 ## 4. Data and Privacy
 
-The bot stores its data within Reddit. The only information shared externally by the bot is links to new Reddit posts, which are shared to Discord. Images may be retrieved from the official countwithchickenlady Discord server's `#daily-bot-post` channel.
+The bot stores its data within Reddit. The only information shared externally by the bot is links to new Reddit posts, and the username of the person who made the post, which are shared to Discord. Images may be retrieved from the official countwithchickenlady Discord server's `#daily-bot-post` channel.
 
 For more information, see our Privacy Policy (PRIVACY.md).
 
@@ -38,4 +38,4 @@ To the extent permitted by law, we are not responsible for losses resulting from
 
 These Terms may be updated when the bot changes.
 
-For questions or feedback, visit the [ChickenBotOnceADay GitHub repository](https://github.com/AartvB/chickenladybot).
+For questions or feedback, contact u/AartvB on Reddit.

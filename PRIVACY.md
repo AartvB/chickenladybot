@@ -18,7 +18,7 @@ Reddit's own privacy policy applies to information processed by Reddit's platfor
 
 ## 3. Information Shared with Discord
 
-The bot shares links to new Reddit posts on Discord.
+The bot shares links to new Reddit posts, and the username of the person who made the post, on Discord.
 
 The bot may also retrieve images posted in the official countwithchickenlady Discord server's `#daily-bot-post` channel for use in its Reddit posts.
 
@@ -35,11 +35,15 @@ The bot relies on Reddit and Discord to provide its functionality. Their respect
 
 Data stored on Reddit is subject to Reddit's systems and security practices. No online service can guarantee absolute security or uninterrupted availability.
 
-## 6. Changes to This Policy
+## 6. Date Deletion
+
+If a user removes a post, their data will be removed from the bot's tracking systems after 21 days. The bot does not retain user data beyond what is necessary for its functionality.
+
+## 7. Changes to This Policy
 
 This Privacy Policy may be updated if the bot's functionality or data handling changes.
 
-## 7. Contact
+## 8. Contact
 
-For questions about this policy, visit the [ChickenBotOnceADay GitHub repository](https://github.com/AartvB/chickenladybot).
+For questions about this policy, contact u/AartvB on Reddit.
 
