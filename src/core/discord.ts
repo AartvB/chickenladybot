@@ -2,6 +2,28 @@ import { context, reddit, redis, settings } from "@devvit/web/server";
 import { DBVersion, getDateTime, isInSoftShutdown, isPostDeleted, TaskScheduler } from "./helpers";
 import { T3 } from "@devvit/web/shared";
 
+interface DiscordReaction {
+  emoji: {
+    name: string | null;
+    id?: string | null;
+  };
+  count: number;
+}
+
+interface DiscordAttachment {
+  id: string;
+  filename: string;
+  url: string;
+  content_type?: string | null;
+}
+
+interface DiscordMessage {
+  id: string;
+  timestamp: string;
+  reactions?: DiscordReaction[];
+  attachments?: DiscordAttachment[];
+}
+
 export async function handleDiscord(): Promise<{ message: string; status: string; number: number }> {
   if (context.subredditName != 'countwithchickenlady') { return { message: "This task can only be run in the countwithchickenlady subreddit.", status: "error" , number: 500 }; }
   const taskScheduler = new TaskScheduler({ stopAtSoftShutdown: true });
@@ -100,7 +122,7 @@ export async function handleDiscord(): Promise<{ message: string; status: string
   // Task: Posting image of the day from discord to reddit
   if (Date.now() - latestPostTimestamp >= 24 * 60 * 60 * 1000 + 60 * 1000) {
     let link = `https://discord.com/api/v10/channels/${dailyBotPostChannelId}/messages`;
-    let latestDiscordId = await redis.get(`latest-bot-discord-message-v${dbVersion}`);
+    const latestDiscordId = await redis.get(`latest-bot-discord-message-v${dbVersion}`);
     if (latestDiscordId) { link += `?after=${latestDiscordId}&limit=100`; }
     else { link += `?limit=100`; }
 
@@ -110,10 +132,10 @@ export async function handleDiscord(): Promise<{ message: string; status: string
     const messages = await response.json();
     if (!Array.isArray(messages)) { return { message: successString + " Failed to fetch messages from Discord.", status: "error" , number: 500 }; }
 
-    let checkmarkCounts: { messageId: string; count: number; timestamp: number; }[] = [];
+    const checkmarkCounts: { messageId: string; count: number; timestamp: number; }[] = [];
     for (const message of messages) {
       const reactions = Array.isArray(message.reactions) ? message.reactions : [];
-      const checkmarkReaction = reactions.find((reaction: any) => reaction.emoji?.name === '✅');
+      const checkmarkReaction = reactions.find((reaction: DiscordReaction) => reaction.emoji?.name === '✅');
       const checkmarkCount = checkmarkReaction ? checkmarkReaction.count : 0;
       checkmarkCounts.push({ messageId: message.id, count: checkmarkCount, timestamp: message.timestamp });
     }
@@ -122,7 +144,7 @@ export async function handleDiscord(): Promise<{ message: string; status: string
     const topMessage = checkmarkCounts[0];
     if (topMessage === undefined || topMessage.count === 0) { return { message: successString + " No messages with checkmark reactions found in Discord channel.", status: "ok" , number: 200 }; }
 
-    const topAttachment = messages.find((msg: any) => msg.id === topMessage.messageId)?.attachments?.[0];
+    const topAttachment = messages.find((msg: DiscordMessage) => msg.id === topMessage.messageId)?.attachments?.[0];
     if (!topAttachment) { return { message: successString + " Top message has no attachment.", status: "ok" , number: 200 }; }
 
     let nextNumber = await redis.get(`current-count-v${dbVersion}`) ?? '0';
@@ -130,7 +152,7 @@ export async function handleDiscord(): Promise<{ message: string; status: string
 
     const post = await reddit.submitPost( {subredditName: context.subredditName, title: nextNumber, url: topAttachment.url,} );
     const comment = await reddit.submitComment({id: post.id, text: "This image was chosen by the people in our discord server. Want to have a vote on this? Join us [here](https://discord.gg/tefj2Xu9FP)!", runAs: 'APP'});
-    comment.distinguish(true);
+    await comment.distinguish(true);
     await redis.set(`latest-bot-post-v${dbVersion}`, post.id);
     await redis.set(`latest-chosen-discord-message-id-v${dbVersion}`, topMessage.messageId);
     console.log(`${getDateTime()}: Posted image of the day from discord to reddit with post ID ${post.id} and title ${nextNumber}.`);

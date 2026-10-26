@@ -114,24 +114,24 @@ triggers.post('/on-comment-create', async (c) => {
   if (body.toLowerCase().includes('!unsubscribe')) {
     await removeSubscription(username);
     const reply = await comment.reply({text: `You have been unsubscribed from streak notifications. You will no longer receive notifications about your streak.${await botExplainer()}`, runAs: 'APP'});
-    reply.distinguish(false);
+    await reply.distinguish(false);
   }
   else if (body.toLowerCase().includes('!subscribe')) {
     await addSubscription(username);
     const reply = await comment.reply({text: `You have been subscribed to streak notifications. You will now receive notifications about your streak.${await botExplainer()}`, runAs: 'APP'});
-    reply.distinguish(false);
+    await reply.distinguish(false);
   }
   if (body.toLowerCase().includes('!viewpostwindow')) {
     const postWindow = await viewPostWindow(username);
     if (postWindow.success) {
       const reply = await comment.reply({text: (await viewPostWindow(username)).message+await botExplainer(), runAs: 'APP'});
-      reply.distinguish(false);
+      await reply.distinguish(false);
     }
     else { await addToEndOfQueue(`view-post-window-queue-v${await DBVersion()}`, input.author.id); }
   }
   if (body.toLowerCase().includes('!help')) {
     const reply = await comment.reply({text: await botHelp() + await botExplainer(), runAs: 'APP'});
-    reply.distinguish(false);
+    await reply.distinguish(false);
   }
 
   return c.json<TriggerResponse>({status: 'success',}, 200);

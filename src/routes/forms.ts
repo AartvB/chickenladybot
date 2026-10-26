@@ -130,7 +130,7 @@ forms.post('/post-as-bot', async (c) => {
     if (stickyPost) { await post.sticky(); }
     if (lockPost) { await post.lock(); }
     const postingDateTimeUTC = post.createdAt.toISOString();
-    let postInfo = `Posted by u/${username} on ${postingDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyPost ? 'Stickied' : 'Not stickied'}. ${lockPost ? 'Locked' : 'Not locked'}.\n\nPost body:\n\n${text + footerText}`;
+    const postInfo = `Posted by u/${username} on ${postingDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyPost ? 'Stickied' : 'Not stickied'}. ${lockPost ? 'Locked' : 'Not locked'}.\n\nPost body:\n\n${text + footerText}`;
     await redis.set(`bot-post-info-${post.id}-version-1-v${DBVersion()}`, postInfo);
     console.log(`${getDateTime()}: u/${username} posted as bot: ${post.id}`);
     return c.json<UiResponse>({ showToast: `You successfully posted as the bot!` }, 200);
@@ -165,11 +165,11 @@ forms.post('/edit-bot-post', async (c) => {
     if (lockPost) { await post.lock(); }
     else { await post.unlock(); }
     const editDateTimeUTC = new Date().toISOString();
-    let postInfo = `Edited by u/${username} on ${editDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyPost ? 'Stickied' : 'Not stickied'}. ${lockPost ? 'Locked' : 'Not locked'}.\n\nPost body:\n\n${text}`;
+    const postInfo = `Edited by u/${username} on ${editDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyPost ? 'Stickied' : 'Not stickied'}. ${lockPost ? 'Locked' : 'Not locked'}.\n\nPost body:\n\n${text}`;
 
     let newVersion = 2;
     while (true) {
-      let newPostInfo = await redis.get(`bot-post-info-${post.id}-version-${newVersion}-v${DBVersion()}`);
+      const newPostInfo = await redis.get(`bot-post-info-${post.id}-version-${newVersion}-v${DBVersion()}`);
       if (newPostInfo) { newVersion++; }
       else { break; }
     }
@@ -201,7 +201,7 @@ forms.post('/view-bot-post-info', async (c) => {
     postInfo = `You are viewing the ${version=='full' ? 'full history' : 'history summary'} of [this](https://www.reddit.com/r/${context.subredditName}/comments/${post.id}) bot post:`;
     let versionNumber = 1;
     while (true) {
-      let newPostInfo = await redis.get(`bot-post-info-${post.id}-version-${versionNumber}-v${DBVersion()}`);
+      const newPostInfo = await redis.get(`bot-post-info-${post.id}-version-${versionNumber}-v${DBVersion()}`);
       if (newPostInfo) {
         postInfo += `\n\n# Version ${versionNumber}:`;
         if (version == 'full') { postInfo += `\n\n${newPostInfo}`; }
@@ -217,7 +217,7 @@ forms.post('/view-bot-post-info', async (c) => {
     postInfo = `You are viewing version ${version} of [this](https://www.reddit.com/r/${context.subredditName}/comments/${post.id}) bot post:`;
     postInfo += `\n\n${postInfoData}`;
   }
-  reddit.sendPrivateMessage({to: username, subject: `Bot post info for post ${post.id.slice(3)}`, text: postInfo});
+  await reddit.sendPrivateMessage({to: username, subject: `Bot post info for post ${post.id.slice(3)}`, text: postInfo});
   console.log(`${getDateTime()}: u/${username} viewed bot post info for post: ${post.id}`);
   return c.json<UiResponse>({ showToast: `You successfully viewed the bot post info! It has been sent to your private messages.` }, 200);
 });
@@ -258,7 +258,7 @@ forms.post('/comment-as-bot', async (c) => {
     if (showModLabel) { await comment.distinguish(stickyComment); }
     if (lockComment) { await comment.lock(); }
     const commentDateTimeUTC = comment.createdAt.toISOString();
-    let commentInfo = `Commented by u/${username} on ${commentDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyComment ? 'Stickied' : 'Not stickied'}. ${lockComment ? 'Locked' : 'Not locked'}.\n\nComment body:\n\n${text + footerText}`;
+    const commentInfo = `Commented by u/${username} on ${commentDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyComment ? 'Stickied' : 'Not stickied'}. ${lockComment ? 'Locked' : 'Not locked'}.\n\nComment body:\n\n${text + footerText}`;
     await redis.set(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`, commentInfo);
     console.log(`${getDateTime()}: u/${username} commented as bot: ${comment.id}`);
     return c.json<UiResponse>({ showToast: `You successfully commented as the bot!` }, 200);
@@ -296,11 +296,11 @@ forms.post('/edit-bot-comment', async (c) => {
     if (lockComment) { await comment.lock(); }
     else { await comment.unlock(); }
     const editDateTimeUTC = new Date().toISOString();
-    let commentInfo = `Edited by u/${username} on ${editDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyComment ? 'Stickied' : 'Not stickied'}. ${lockComment ? 'Locked' : 'Not locked'}.\n\nComment body:\n\n${text}`;
+    const commentInfo = `Edited by u/${username} on ${editDateTimeUTC} UTC. Mod label ${showModLabel ? '' : 'not '}shown. ${stickyComment ? 'Stickied' : 'Not stickied'}. ${lockComment ? 'Locked' : 'Not locked'}.\n\nComment body:\n\n${text}`;
 
     let newVersion = 2;
     while (true) {
-      let newCommentInfo = await redis.get(`bot-comment-info-${comment.id}-version-${newVersion}-v${DBVersion()}`);
+      const newCommentInfo = await redis.get(`bot-comment-info-${comment.id}-version-${newVersion}-v${DBVersion()}`);
       if (newCommentInfo) { newVersion++; }
       else { break; }
     }
@@ -332,7 +332,7 @@ forms.post('/view-bot-comment-info', async (c) => {
     commentInfo = `You are viewing the ${version=='full' ? 'full history' : 'history summary'} of [this](https://www.reddit.com${comment.permalink}) bot comment:`;
     let versionNumber = 1;
     while (true) {
-      let newCommentInfo = await redis.get(`bot-comment-info-${comment.id}-version-${versionNumber}-v${DBVersion()}`);
+      const newCommentInfo = await redis.get(`bot-comment-info-${comment.id}-version-${versionNumber}-v${DBVersion()}`);
       if (newCommentInfo) {
         commentInfo += `\n\n# Version ${versionNumber}:`;
         if (version == 'full') { commentInfo += `\n\n${newCommentInfo}`; }
@@ -348,7 +348,7 @@ forms.post('/view-bot-comment-info', async (c) => {
     commentInfo = `You are viewing version ${version} of [this](https://www.reddit.com${comment.permalink}) bot comment:`;
     commentInfo += `\n\n${commentInfoData}`;
   }
-  reddit.sendPrivateMessage({to: username, subject: `Bot comment info for comment ${comment.id.slice(3)}`, text: commentInfo});
+  await reddit.sendPrivateMessage({to: username, subject: `Bot comment info for comment ${comment.id.slice(3)}`, text: commentInfo});
   console.log(`${getDateTime()}: u/${username} viewed bot comment info for comment: ${comment.id}`);
   return c.json<UiResponse>({ showToast: `You successfully viewed the bot comment info! It has been sent to your private messages.` }, 200);
 });
@@ -364,10 +364,10 @@ forms.post('/change-settings', async (c) => {
   if (!multiplePostsPerDayReasonId || !wrongTitleReasonId || !selfieRemovalReasonId || !selfieFlairId || !politicalFlairId) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
   const subreddit = await reddit.getCurrentSubreddit();
 
-  let removalReasons = await subreddit.getRemovalReasons();
+  const removalReasons = await subreddit.getRemovalReasons();
   removalReasons.push({ id: 'none', title: 'None', message: 'None' });
   const rawFlairs = await subreddit.getPostFlairTemplates();
-  let flairs: { label: string, value: string }[] = [];
+  const flairs: { label: string, value: string }[] = [];
   for (const flair of rawFlairs) { flairs.push({ value: flair.id, label: flair.text }); }
   flairs.push({ value: 'none', label: 'None' });
 
@@ -451,17 +451,17 @@ forms.post('/apply-rule', async (c) => {
 
       const commentText = 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the selfie rules in the future.'+await botExplainer();
       const comment = await post.addComment({text: commentText, runAs: 'APP'});
-      comment.distinguish(true);
+      await comment.distinguish(true);
 
       const commentDateTimeUTC = comment.createdAt.toISOString();
-      let commentInfo = `u/${modUsername} used the 'apply rule' feature on ${commentDateTimeUTC} UTC, which created this comment.\n\nComment body:\n\n${commentText}`;
+      const commentInfo = `u/${modUsername} used the 'apply rule' feature on ${commentDateTimeUTC} UTC, which created this comment.\n\nComment body:\n\n${commentText}`;
       await redis.set(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`, commentInfo);
  
-      post.approve();
+      await post.approve();
       await reddit.addModNote({subreddit: context.subredditName, user: post.authorName, note: modNoteText});
       return c.json<UiResponse>({ showToast: 'The post has been flaired as a selfie and marked as a spoiler.',}, 200);
     }
-    post.approve();
+    await post.approve();
     return c.json<UiResponse>({ showToast: 'The post already follows all selfie rules I can check.',}, 200);
   }
   if (rule == 'political') {
@@ -492,19 +492,20 @@ forms.post('/apply-rule', async (c) => {
 
       const commentText = 'This post didn\'t have the political flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the political rules in the future.'+await botExplainer();
       const comment = await post.addComment({text: commentText, runAs: 'APP'});
-      comment.distinguish(true);
+      await comment.distinguish(true);
 
       const commentDateTimeUTC = comment.createdAt.toISOString();
-      let commentInfo = `u/${modUsername} used the 'apply rule' feature on ${commentDateTimeUTC} UTC, which created this comment.\n\nComment body:\n\n${commentText}`;
+      const commentInfo = `u/${modUsername} used the 'apply rule' feature on ${commentDateTimeUTC} UTC, which created this comment.\n\nComment body:\n\n${commentText}`;
       await redis.set(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`, commentInfo);
 
-      post.approve();
+      await post.approve();
       await reddit.addModNote({subreddit: context.subredditName, user: post.authorName, note: modNoteText});
       return c.json<UiResponse>({ showToast: 'The post has been flaired as a political and marked as a spoiler.',}, 200);
     }
-    post.approve();
+    await post.approve();
     return c.json<UiResponse>({ showToast: 'The post already follows all political rules I can check.',}, 200);
   }
+  return c.json<UiResponse>({ showToast: 'Invalid rule provided. Please try again.',}, 200);
 });
   
 forms.post('/fix-streak-followup', async (c) => {

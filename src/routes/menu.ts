@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { T1, T3, UiResponse } from '@devvit/web/shared';
+import type { FormField, T1, T3, UiResponse } from '@devvit/web/shared';
 import { DBVersion, isInHardShutdown, isInSoftShutdown, viewPostWindow } from '../core/helpers';
 import { reddit, redis } from '@devvit/web/server';
 
@@ -241,7 +241,7 @@ menu.post('/view-bot-post-info', async (c) => {
   const postInfo = await redis.get(`bot-post-info-${post.id}-version-1-v${DBVersion()}`);
   if (!postInfo) { return c.json<UiResponse>({ showToast: 'This post was created by the bot itself.',}, 200); }
 
-  let versions: {label: string, value: string}[] = [{ label: 'History summary', value: 'summary' }, { label: 'Full history', value: 'full' }];
+  const versions: {label: string, value: string}[] = [{ label: 'History summary', value: 'summary' }, { label: 'Full history', value: 'full' }];
   let version = 1;
   while (true) {
     const info = await redis.get(`bot-post-info-${post.id}-version-${version}-v${DBVersion()}`);
@@ -288,7 +288,7 @@ menu.post('/comment-as-bot', async (c) => {
   const isPost = values.targetId?.startsWith('t3_') ?? false;
   const isComment = values.targetId?.startsWith('t1_') ?? false;
   if (!isPost && !isComment) { return c.json<UiResponse>({ showToast: 'Invalid target ID. Please try again.',}, 200); }
-  let fields: any[] = [{
+  const fields: FormField[] = [{
       name: 'body',
       label: 'Comment Text',
       type: 'paragraph',
@@ -370,7 +370,7 @@ menu.post('/edit-bot-comment', async (c) => {
 
   const commentOnPost = comment.parentId.startsWith('t3_');
 
-  let fields: any[] = [
+  const fields: FormField[] = [
     {
       name: 'body',
       label: 'Comment Text',
@@ -437,7 +437,7 @@ menu.post('/view-bot-comment-info', async (c) => {
   const commentInfo = await redis.get(`bot-comment-info-${comment.id}-version-1-v${DBVersion()}`);
   if (!commentInfo) { return c.json<UiResponse>({ showToast: 'This comment was created by the bot itself.',}, 200); }
 
-  let versions: {label: string, value: string}[] = [{ label: 'History summary', value: 'summary' }, { label: 'Full history', value: 'full' }];
+  const versions: {label: string, value: string}[] = [{ label: 'History summary', value: 'summary' }, { label: 'Full history', value: 'full' }];
   let version = 1;
   while (true) {
     const info = await redis.get(`bot-comment-info-${comment.id}-version-${version}-v${DBVersion()}`);
@@ -483,7 +483,7 @@ menu.post('/change-settings', async (c) => {
   // Allows a mod to change the settings of the bot
   const subreddit = await reddit.getCurrentSubreddit();
 
-  let removalReasons = await subreddit.getRemovalReasons();
+  const removalReasons = await subreddit.getRemovalReasons();
   removalReasons.push({ id: 'none', title: 'None', message: 'None' });
   let defaultMultiplePostsPerDayReasonId = await redis.get(`multiple-posts-per-day-removal-reason-id-v${await DBVersion()}`) ?? 'none';
   if (!removalReasons.some((reason) => reason.id == defaultMultiplePostsPerDayReasonId)) { defaultMultiplePostsPerDayReasonId = 'none'; }
@@ -493,7 +493,7 @@ menu.post('/change-settings', async (c) => {
   if (!removalReasons.some((reason) => reason.id == defaultSelfieRemovalReasonId)) { defaultSelfieRemovalReasonId = 'none'; }
 
   const rawFlairs = await subreddit.getPostFlairTemplates();
-  let flairs: { label: string, value: string }[] = [];
+  const flairs: { label: string, value: string }[] = [];
   for (const flair of rawFlairs) { flairs.push({ value: flair.id, label: flair.text }); }
   flairs.push({ value: 'none', label: 'None' });
   let defaultSelfieFlairId = await redis.get(`selfie-flair-id-v${await DBVersion()}`) ?? 'none';

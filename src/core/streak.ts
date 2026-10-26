@@ -291,7 +291,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
       if (comment != undefined) {
         const username = comment.authorName;
         const reply = await comment.reply({text: (await viewPostWindow(username)).message+await botExplainer(), runAs: 'APP'});
-        reply.distinguish(false);
+        await reply.distinguish(false);
       }
     }
     await redis.zRem(`view-post-window-queue-v${dbVersion}`, [id.member]);
@@ -381,7 +381,7 @@ export async function reportStreakDevelopment(username: string, timezone: string
   let nMinutesUntilPostCounts = await settings.get('nMinutesUntilPostCounts');
   if (nMinutesUntilPostCounts == undefined || typeof nMinutesUntilPostCounts != 'number') { nMinutesUntilPostCounts = 10; }
 
-  let events: { timestamp: number, event: string }[] = [];
+  const events: { timestamp: number, event: string }[] = [];
   for (const postInfo of recentPosts) {
     const postId = postInfo['member'];
     const streakLength = await redis.zScore(`post-streaks-v${dbVersion}`, postId);
@@ -422,7 +422,7 @@ export async function reportStreakDevelopment(username: string, timezone: string
   report += `Current streak: ${currentStreak == undefined ? 'Unknown' : currentStreak}.${currentCoadStreak == undefined ? '' : ` Current streak taken over from COAD: ${currentCoadStreak}` }.\n\n`;
   let modMailConversationId: string | undefined = undefined;
   for (const event of events) {
-    let newReport = report + event.event;
+    const newReport = report + event.event;
     if (newReport.length > 10000) {
       if (modMailConversationId == undefined) {
         const modMailConversation = await reddit.modMail.createConversation({body: report, subject: `Streak development for ${username}`, subredditName: context.subredditName});
