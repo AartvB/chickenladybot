@@ -11,6 +11,8 @@ triggers.post('/on-app-install', async (c) => {
   const input = await c.req.json<OnAppInstallRequest>();
   console.log('App installed to subreddit: r/' + input.subreddit?.name);
 
+  await reddit.modMail.createConversation({body: `u/ChickenBotOnceADay has been installed in r/${input.subreddit?.name}. This probably means that the bot was removed from the subreddit and then re-added. This means that all of the bot's data is lost. Please put the bot on a hard shutdown, close the subreddit for new posts, and let u/Aartvb contact reddit support to restore the data.`, subject: `CRITICAL WARNING: u/ChickenBotOnceADay app (re)installed in r/${input.subreddit?.name}`, subredditName: input.subreddit?.name as string});
+
   const dbVersion = '2';
   await redis.set('database-version', dbVersion);
   await redis.set('new-post-handler-lock-v' + dbVersion, 'open');
