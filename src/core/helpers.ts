@@ -5,6 +5,7 @@ import { Post } from '@devvit/web/server';
 import originalDatabase from '../core/original_database.json';
 
 export async function botExplainer(): Promise<string> { return `\n\n^(This piece of content has been created automatically by a bot. If you think it made a mistake, [contact the mods](https://www.reddit.com/message/compose/?to=/r/${context.subredditName}&subject=[Bot%20mistake]&message=I%20believe%20the%20bot%20made%20a%20mistake:) via modmail. The code for this bot is fully open source, and can be found [here](https://github.com/AartvB/chickenladybot).)`; }
+export async function botHelp(): Promise<string> { return `Hi! I am u/ChickenBotOnceADay, the bot that helps you keep track of your streaks in r/${context.subredditName}. You can reach me by commenting anywhere in the subreddit and by sending me a private message.\n\nHere are the commands you can use:\n\n- !subscribe: Subscribe to streak notifications (get reminded when it's time to post).\n- !unsubscribe: Unsubscribe from streak notifications.\n- !viewpostwindow: View your current post window for maintaining your streak.\n- !help: Show this help message.\n\nYou can also do these things by going to the main subreddit page, clicking the three dots on the top right and clicking the 'View post window' option.`; }
 export async function isPostDeleted(post: Post): Promise<boolean> { return post.authorName == '[deleted]' || post.removed; }
 export async function isPostDeletedEarly(postId: T3): Promise<boolean> {
   const dbVersion = await DBVersion();
@@ -40,16 +41,18 @@ export async function removeNotifications(username: string): Promise<void> {
   await redis.zRem(`second-notifications-list-v${await DBVersion()}`, [username]);
   await redis.zRem(`untimed-notifications-list-v${await DBVersion()}`, [username]);
 }
-export async function viewPostWindow(username: string): Promise<string> {
+export async function viewPostWindow(username: string): Promise<{message: string, success: boolean}> {
   console.log(`${getDateTime()}: u/${username} is viewing their post window.`);
   const startNextPostTimeframe = await redis.zScore(`start-next-post-timeframe-v${await DBVersion()}`, username);
   const endNextPostTimeframe = await redis.zScore(`end-next-post-timeframe-v${await DBVersion()}`, username);
   let postWindowMessage = '';
+  let success = true;
   if (!startNextPostTimeframe || !endNextPostTimeframe) {
     const currentStreak = await redis.zScore(`current-streaks-v${await DBVersion()}`, username) ?? 0;
     if (currentStreak == 0) { postWindowMessage = 'You currently have no streak. Make a new post to start building one!'; }
     else {
       postWindowMessage = 'Your next post window could not be determined. This is correct if you have not posted yet, or if your streak is 0, because then you have no streak to maintain. Otherwise, I will try to determine it again now. If you try again in 20 seconds and it still does not work, you have to wait until you made a new post.';
+      success = false;
       const latestPost = await redis.zRange(`posts-of-${username}-v${await DBVersion()}`, -1, -1);
       if (latestPost[0] != undefined) { await addToEndOfQueue(`streak-queue-v${await DBVersion()}`, latestPost[0].member); }
     }
@@ -63,7 +66,7 @@ export async function viewPostWindow(username: string): Promise<string> {
       postWindowMessage += ` Do not create it later than ${formatDateTime(endNextPostTimeframe - now)} from now. Otherwise, you will lose your streak.`;      
     }
   }
-  return postWindowMessage;
+  return {message: postWindowMessage, success: success};
 }
 
 export async function updateTargetPost() {

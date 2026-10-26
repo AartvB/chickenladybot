@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
 import { reddit, redis, settings } from '@devvit/web/server';
-import { addSubscription, addToEndOfQueue, botExplainer, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, updateTargetPost, viewPostWindow } from '../core/helpers';
+import { addSubscription, addToEndOfQueue, botExplainer, botHelp, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, updateTargetPost, viewPostWindow } from '../core/helpers';
   
 export const triggers = new Hono();
 
@@ -107,6 +107,7 @@ triggers.post('/on-comment-create', async (c) => {
   const username = input.author.name;
   const comment = await reddit.getCommentById(input.comment.id);
   if (!username || !comment) { return c.json<TriggerResponse>({status: 'success',}, 200); }
+  if (username == 'chickenbotonceaday') { return c.json<TriggerResponse>({status: 'success',}, 200); }
   const body = comment.body;
   if (body.toLowerCase().includes('!unsubscribe')) {
     await removeSubscription(username);
@@ -118,8 +119,16 @@ triggers.post('/on-comment-create', async (c) => {
     const reply = await comment.reply({text: `You have been subscribed to streak notifications. You will now receive notifications about your streak.${await botExplainer()}`, runAs: 'APP'});
     reply.distinguish(false);
   }
-  else if (body.toLowerCase().includes('!viewpostwindow')) {
-    const reply = await comment.reply({text: await viewPostWindow(username)+await botExplainer(), runAs: 'APP'});
+  if (body.toLowerCase().includes('!viewpostwindow')) {
+    const postWindow = await viewPostWindow(username);
+    if (postWindow.success) {
+      const reply = await comment.reply({text: (await viewPostWindow(username)).message+await botExplainer(), runAs: 'APP'});
+      reply.distinguish(false);
+    }
+    else { await addToEndOfQueue(`view-post-window-queue-v${await DBVersion()}`, input.author.id); }
+  }
+  if (body.toLowerCase().includes('!help')) {
+    const reply = await comment.reply({text: await botHelp() + await botExplainer(), runAs: 'APP'});
     reply.distinguish(false);
   }
 

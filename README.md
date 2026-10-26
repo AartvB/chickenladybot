@@ -1,5 +1,5 @@
-# ChickenLadyBot
-ChickenLadyBot is a reddit bot, used to moderate the subreddit r/countwithchickenlady.
+# ChickenBotOnceADay
+ChickenBotOnceADay is a reddit bot, used to moderate the subreddit r/countwithchickenlady.
 
 This code is shared to give people insight in how this bot works. You are free to use (parts of) this code to create a reddit bot of your own!
 

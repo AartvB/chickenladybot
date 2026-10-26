@@ -20,6 +20,7 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **first-notifications-list**: Contains all usernames of users that are subscribed to notifications about their streak, and who still need to receive the first notification (when the post window opens). Score is the timestamp when the notification must be sent.
 - **second-notifications-list**: Contains all usernames of users that are subscribed to notifications about their streak, and who still need to receive the second notification (5 hours before the post window closes). Score is the timestamp when the notification must be sent.
 - **untimed-notifications-list**: Contains all usernames of users that are subscribed to notifications about their streak, and who still need to receive the untimed notification (this happens when the notification window cannot be determined correctly). Score is the timestamp when the notification must be sent.
+- **view-post-window-queue**: Contains all user ids or comment ids for which the post window must be calculated and sent to the user.
 - **post-streaks**: Contains all post ids. The score is their streak at the point in time of posting that post.
 - **post-COAD-streaks**: Contains all post ids. The score is their COAD-streak at the point in time of posting that post.
 - **top-streaks**: Contains all user ids. The score is the highest streak they ever had.

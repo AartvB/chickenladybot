@@ -1,5 +1,5 @@
 import { context, reddit, settings } from '@devvit/web/server';
-import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime, addSubscription, removeSubscription } from './helpers';
+import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime, addSubscription, removeSubscription, viewPostWindow, addToEndOfQueue, botExplainer, botHelp } from './helpers';
 import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
@@ -225,7 +225,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
       await redis.zAdd(`end-next-post-timeframe-v${dbVersion}`, { member: username, score: streak.maxTimestampNextPost });
       if (isSubscribed) {
         if (streak.minTimestampNextPost > Date.now()) { await redis.zAdd(`first-notifications-list-v${dbVersion}`, { member: username, score: streak.minTimestampNextPost }); }
-        if (streak.maxTimestampNextPost - 5 * 60 * 60 * 1000 > Date.now()) { await redis.zAdd(`second-notifications-list-v${dbVersion}`, { member: username, score: streak.maxTimestampNextPost }); }
+        if (streak.maxTimestampNextPost - 5 * 60 * 60 * 1000 > Date.now()) { await redis.zAdd(`second-notifications-list-v${dbVersion}`, { member: username, score: streak.maxTimestampNextPost - 5 * 60 * 60 * 1000 }); }
       }
     }
     else {
@@ -246,6 +246,8 @@ export async function handleStreak(): Promise<{ status: string; message: string;
 			if (currentQueueScore == postInfo['score']) { await redis.zRem(`streak-queue-v${dbVersion}`, [postId]); } // Only remove the post from the queue if it has not been added again with a new score. That's because it gets added to the queue again if a post before it was deleted, which might have influence on the streak
 		}
 	}
+
+  // Private message handling
   const messagesListing = await reddit.getMessages({type: 'unread'});
   const messages = (await messagesListing.all());
   console.log(`${getDateTime()}: Finished calculating streaks for all posts in the streak queue. Now checking the ${messages.length} incoming messages.`);
@@ -265,14 +267,22 @@ export async function handleStreak(): Promise<{ status: string; message: string;
         const username = (await reddit.getUserById(user as `t2_${string}`))?.username;
         if (username != undefined) { 
           console.log(`${getDateTime()}: Received message from u/${username}`);
-          reddit.sendPrivateMessage({to: 'Aartvb', subject: `[Chickenbot Message] from u/${username}`, text: `The chickenbot received a message from the user u/${username} on ${message.created.toISOString()}. The message was:\n\n${message.body}`});
+          await reddit.sendPrivateMessage({to: 'Aartvb', subject: `[Chickenbot Message] from u/${username}`, text: `The chickenbot received a message from the user u/${username} on ${message.created.toISOString()}. The message was:\n\n${message.body}`});
           if (message.body.toLowerCase().includes('!unsubscribe')) { 
             await removeSubscription(username);
             await reddit.sendPrivateMessage({to: username, subject: `🐔 Unsubscribed from r/${context.subredditName} streak notifications 🐔`, text: `You have been unsubscribed from streak notifications for r/${context.subredditName}. You will no longer receive notifications about your streak. If you want to subscribe again, respond with "!subscribe" in this conversation.`});
           }
-          if (message.body.toLowerCase().includes('!subscribe')) {
+          else if (message.body.toLowerCase().includes('!subscribe')) {
             await addSubscription(username);
             await reddit.sendPrivateMessage({to: username, subject: `🐔 Subscribed to r/${context.subredditName} streak notifications 🐔`, text: `You have been subscribed to streak notifications for r/${context.subredditName}. You will receive notifications about your streak. If you want to unsubscribe, respond with "!unsubscribe" in this conversation.`});
+          }
+          if (message.body.toLowerCase().includes('!viewpostwindow')) {
+            const postWindow = await viewPostWindow(username);
+            if (postWindow.success) { await reddit.sendPrivateMessage({to: username, subject: `🐔 Your streak post window for r/${context.subredditName} 🐔`, text: (await viewPostWindow(username)).message});   }
+            else { await addToEndOfQueue(`view-post-window-queue-v${dbVersion}`, user); }
+          }
+          if (message.body.toLowerCase().includes('!help')) {
+            await reddit.sendPrivateMessage({to: username, subject: `🐔 Help for ChickenBotOnceADay 🐔`, text: await botHelp()});
           }
         }
       }
@@ -280,6 +290,29 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     await message.markAsRead();
   }
   
+  // Send post window comments and messages that have been delayed
+  while (await redis.zCard(`view-post-window-queue-v${dbVersion}`) > 0 && await taskScheduler.startNextTask()) {
+    const id = (await redis.zRange(`view-post-window-queue-v${dbVersion}`, 0, 0))[0];
+    if (id == undefined) { return { status: 'error', message: 'Database error', number: 404 }; }
+    if (id.member.startsWith("t2_")) {
+      const user = await reddit.getUserById(id.member as `t2_${string}`);
+      if (user != undefined) {
+        const username = user.username;
+        await reddit.sendPrivateMessage({to: username, subject: `🐔 Your streak post window for r/${context.subredditName} 🐔`, text: (await viewPostWindow(username)).message});
+      }
+    }
+    else if (id.member.startsWith("t1_")) {
+      const comment = await reddit.getCommentById(id.member as `t1_${string}`);
+      if (comment != undefined) {
+        const username = comment.authorName;
+        const reply = await comment.reply({text: (await viewPostWindow(username)).message+await botExplainer(), runAs: 'APP'});
+        reply.distinguish(false);
+      }
+    }
+    await redis.zRem(`view-post-window-queue-v${dbVersion}`, [id.member]);
+  }
+
+  // Notification messages
   console.log(`${getDateTime()}: Finished processing incoming messages. Now sending notification messages to users.`);
   const now = Date.now();
   while (true) {
@@ -287,7 +320,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     const userToRemind = (await redis.zRange(`first-notifications-list-v${dbVersion}`, 0, now, { by: 'score' }))[0];
     if (userToRemind == undefined) { break; }
     const currentStreak = await redis.zScore(`current-streaks-v${dbVersion}`, userToRemind.member);
-    reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
+    await reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
     await redis.zRem(`first-notifications-list-v${dbVersion}`, [userToRemind.member]);
   }
   while (true) {
@@ -295,7 +328,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     const userToRemind = (await redis.zRange(`second-notifications-list-v${dbVersion}`, 0, now, { by: 'score' }))[0];
     if (userToRemind == undefined) { break; }
     const currentStreak = await redis.zScore(`current-streaks-v${dbVersion}`, userToRemind.member);
-    reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! You have 5 hours to post before your streak is broken. We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
+    await reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! You have 5 hours to post before your streak is broken. We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
     await redis.zRem(`second-notifications-list-v${dbVersion}`, [userToRemind.member]);
   }
   while (true) {
@@ -303,7 +336,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     const userToRemind = (await redis.zRange(`untimed-notifications-list-v${dbVersion}`, 0, now, { by: 'score' }))[0];
     if (userToRemind == undefined) { break; }
     const currentStreak = await redis.zScore(`current-streaks-v${dbVersion}`, userToRemind.member);
-    reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
+    await reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
     await redis.zRem(`untimed-notifications-list-v${dbVersion}`, [userToRemind.member]);
   }
 

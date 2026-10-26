@@ -607,7 +607,7 @@ menu.post('/view-post-window', async (c) => {
           helpText: 'If checked, you will be notified when it is time to post again. Unchecking this box will unsubscribe you from these notifications.'
         }],
         title: 'View post window',
-        description: await viewPostWindow(username),
+        description: (await viewPostWindow(username)).message,
         acceptLabel: 'Confirm',
         cancelLabel: 'Cancel'
       },
