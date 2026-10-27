@@ -26,7 +26,7 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 			let otherStreaksOfUser: { streak: number; source: string; timestamp: string }[] = [];
 			if (otherStreaksOfUserstr != undefined) { otherStreaksOfUser = JSON.parse(otherStreaksOfUserstr); }
 			otherStreaksOfUser.push({ streak: postStreak, source: 'local', timestamp: timestamp.toString() });
-			otherStreaksOfUser.push({ streak: postCOADStreak, source: 'COAD', timestamp: timestamp.toString() });
+			if (postCOADStreak > 0) { otherStreaksOfUser.push({ streak: postCOADStreak, source: 'COAD', timestamp: timestamp.toString() }); }
 			await redis.set(`other-streaks-of-${authorName}-v${dbVersion}`, JSON.stringify(otherStreaksOfUser));
 		}
 	}

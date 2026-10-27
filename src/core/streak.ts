@@ -61,7 +61,9 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
   if (otherStreakSources != undefined) {
     for (const streak of otherStreakSources) {
       if (streak.source === 'COAD') {
-        CoadDates.push([dateFormatter.format(new Date(streak.timestamp)), streak.streak]);
+        const timestampRaw = streak.timestamp;
+        const timestamp = typeof timestampRaw == 'number' ? timestampRaw : parseInt(timestampRaw);
+        CoadDates.push([dateFormatter.format(new Date(timestamp)), streak.streak]);
       }
     }
   }
@@ -69,7 +71,9 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
   if (otherStreakSources != undefined) {
     for (const streak of otherStreakSources) {
       if (streak.source === 'local') {
-        LocalDates.push([dateFormatter.format(new Date(streak.timestamp)), streak.streak]);
+        const timestampRaw = streak.timestamp;
+        const timestamp = typeof timestampRaw == 'number' ? timestampRaw : parseInt(timestampRaw);
+        LocalDates.push([dateFormatter.format(new Date(timestamp)), streak.streak]);
       }
     }
   }
@@ -402,7 +406,8 @@ export async function reportStreakDevelopment(username: string, timezone: string
     events.push({ timestamp: timestamp, event: eventText });
   }
   for (const streakSource of otherStreakSources ?? []) {
-    const timestamp = streakSource.timestamp;
+    const timestampRaw = streakSource.timestamp;
+    const timestamp = typeof timestampRaw == 'number' ? timestampRaw : parseInt(timestampRaw);
     const dateStr = timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: timezone }) : 'Unknown date';
     events.push({ timestamp: timestamp, event: `${dateStr}: Manually added a ${streakSource.source} streak or a post was removed so the post data has been deleted for privacy reasons. Streak: ${streakSource.streak}\n\n` });
   }
