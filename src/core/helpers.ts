@@ -1,6 +1,5 @@
-import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
-import { context, reddit, settings } from '@devvit/web/server';
+import { context, reddit, settings, redis } from '@devvit/web/server';
 import { Post } from '@devvit/web/server';
 import originalDatabase from '../core/original_database.json';
 

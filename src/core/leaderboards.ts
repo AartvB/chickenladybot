@@ -1,6 +1,5 @@
-import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
-import { context, reddit } from '@devvit/web/server';
+import { context, reddit, redis } from '@devvit/web/server';
 import { DBVersion, getDateTime, TaskScheduler } from './helpers';
 
 async function updateCountLeaderboard() {

@@ -1,7 +1,6 @@
 import { botExplainer, isPostDeleted, addToEndOfQueue, updateTargetPost, DBVersion, isPostDeletedEarly, TaskScheduler, getDateTime, isInSoftShutdown, remindModsAboutMissingSettings, formatDateTime, removeNotifications } from './helpers';
-import { context, reddit } from '@devvit/web/server';
+import { context, reddit, redis } from '@devvit/web/server';
 import type { T3 } from '@devvit/shared-types/tid.js';
-import { redis } from '@devvit/redis';
 
 export async function addPostToDatabase(postId: T3, postNumber: number, authorName: string, timestamp: number) {
   console.log(`${getDateTime()}: Adding post ${postId} with title ${postNumber} by user ${authorName} to the database`);

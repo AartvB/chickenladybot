@@ -1,6 +1,5 @@
-import { context, reddit, settings } from '@devvit/web/server';
+import { context, reddit, settings, redis } from '@devvit/web/server';
 import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime, addSubscription, removeSubscription, viewPostWindow, addToEndOfQueue, botExplainer, botHelp } from './helpers';
-import { redis } from '@devvit/redis';
 import { T3 } from '@devvit/shared-types/tid.js';
 
 async function calculateStreakForTimezone(earlierTimestamps: number[], otherStreakSources: undefined | {streak: number, source: string, timestamp: number}[], timestamp: number, timeZone: string): Promise<{ streak: number, CoadStreak: number, minTimestampNextPost: number | undefined, maxTimestampNextPost: number | undefined }> {
