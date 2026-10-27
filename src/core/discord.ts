@@ -59,9 +59,12 @@ export async function handleDiscord(): Promise<{ message: string; status: string
           "Authorization": `Bot ${botToken}`,
           "Content-Type": "application/json",
         },
-        body: `{"content":"u/${authorName} has counted to [${postInfoObj.postNumber}](https://www.reddit.com/r/${context.subredditName}/comments/${postId}/)."}`
+        body: JSON.stringify({content: `u/${authorName} has counted to [${postInfoObj.postNumber}](https://www.reddit.com/r/${context.subredditName}/comments/${postId}/).`})
       })
-      if (!response.ok) {throw new Error(`Discord webhook failed: HTTP ${response.status}`); }
+      if (!response.ok) {
+        console.error(`${getDateTime()}: Discord webhook failed: HTTP ${response.status} - ${await response.text()}`);
+        throw new Error(`Discord webhook failed: HTTP ${response.status}`);
+      }
 
       const isNSFW = (await reddit.getPostById(post.member as T3)).isNsfw();
       const discordMessageId = (await response.json()).id;
