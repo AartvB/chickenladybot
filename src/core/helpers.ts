@@ -3,6 +3,36 @@ import { context, reddit, settings, redis } from '@devvit/web/server';
 import { Post } from '@devvit/web/server';
 import originalDatabase from '../core/original_database.json';
 
+type ScoreEntry = {
+  member: string;
+  score: number;
+};
+type OriginalDatabaseType = {
+  'users': ScoreEntry[];
+  'posts': ScoreEntry[];
+  'posts_of': {[username: string]: ScoreEntry[]};
+  'whole_count_posts': Record<string, ScoreEntry[]>;
+  'whole_count_users': Record<string, ScoreEntry[]>;
+  'post_info': {[postId: string]: {'post_number': number, 'author_name': string, 'timestamp': number}};
+  'other_streaks_of': {[username: string]: ScoreEntry[]};
+  'early_deleted_posts': ScoreEntry[];
+  'current_streaks': ScoreEntry[];
+  'current_COAD_streaks': ScoreEntry[];
+  'post_streaks': ScoreEntry[];
+  'post_COAD_streaks': ScoreEntry[];
+  'top_COAD_streaks': ScoreEntry[];
+  'top_streaks': ScoreEntry[];
+  'post_upvotes': ScoreEntry[];
+  'post_comments': ScoreEntry[];
+  'posts_per_user': ScoreEntry[];
+  'identical_digits_posts': ScoreEntry[];
+  'identical_digits_users': ScoreEntry[];
+  'palindrome_posts': ScoreEntry[];
+  'palindrome_users': ScoreEntry[];
+  'current_count': number;
+
+}
+
 export async function botExplainer(): Promise<string> { return `\n\n^(This piece of content has been created automatically by a bot. If you think it made a mistake, [contact the mods](https://www.reddit.com/message/compose/?to=/r/${context.subredditName}&subject=[Bot%20mistake]&message=I%20believe%20the%20bot%20made%20a%20mistake:) via modmail. The code for this bot is fully open source, and can be found [here](https://github.com/AartvB/chickenladybot).)`; }
 export async function botHelp(): Promise<string> { return `Hi! I am u/ChickenBotOnceADay, the bot that helps you keep track of your streaks in r/${context.subredditName}. You can reach me by commenting anywhere in the subreddit and by sending me a private message.\n\nHere are the commands you can use:\n\n- !subscribe: Subscribe to streak notifications (get reminded when it's time to post).\n- !unsubscribe: Unsubscribe from streak notifications.\n- !viewpostwindow: View your current post window for maintaining your streak.\n- !help: Show this help message.\n\nYou can also do these things by going to the main subreddit page, clicking the three dots on the top right and clicking the 'View post window' option.`; }
 export async function isPostDeleted(post: Post): Promise<boolean> { return post.authorName == '[deleted]' || post.removed; }
@@ -169,6 +199,8 @@ export async function restoreDatabaseBackup(removeExistingData: boolean = true):
 	const dbVersion = await DBVersion();
 	let currentTask = await redis.get(`background-task-tracker-v${dbVersion}`) ?? 'remove-users';
 	
+  const database = originalDatabase as OriginalDatabaseType;
+
   if (removeExistingData) {
     console.log(`${getDateTime()}: Removing existing data from database.`);
     if (currentTask == 'remove-users') {
@@ -270,76 +302,76 @@ export async function restoreDatabaseBackup(removeExistingData: boolean = true):
     if (currentTask == 'remove-current-count') {
       console.log(`${getDateTime()}: Removing current count from database.`);
       await redis.del(`current-count-v${dbVersion}`);
-      currentTask = await updateBackgroundTaskTracker(`remove-posts-of-${Object.keys(originalDatabase.posts_of)[0]}`);
+      currentTask = await updateBackgroundTaskTracker(`remove-posts-of-${Object.keys(database.posts_of)[0]}`);
       if (!await taskScheduler.startNextTask()) { return false; }
     }
     if (currentTask.startsWith('remove-posts-of-')) {
       console.log(`${getDateTime()}: Removing posts of users from database.`);
       let current_username = currentTask.replace('remove-posts-of-', '');
       let i = 0;
-      for (const [username, _] of Object.entries(originalDatabase.posts_of)) {
+      for (const [username, _] of Object.entries(database.posts_of)) {
         i++;
         if (username != current_username) { continue; }
         await redis.del(`posts-of-${username}-v${dbVersion}`);
-        current_username = Object.keys(originalDatabase.posts_of)[i] ?? '';
+        current_username = Object.keys(database.posts_of)[i] ?? '';
         await updateBackgroundTaskTracker(`remove-posts-of-${current_username}`);
         if (!await taskScheduler.startNextTask()) { return false; }
       }
-      currentTask = await updateBackgroundTaskTracker(`remove-whole-count-posts-${Object.keys(originalDatabase.whole_count_posts)[0]}`);
+      currentTask = await updateBackgroundTaskTracker(`remove-whole-count-posts-${Object.keys(database.whole_count_posts)[0]}`);
     }
     if (currentTask.startsWith('remove-whole-count-posts-')) {
       console.log(`${getDateTime()}: Removing whole count posts from database.`);
       let current_number = currentTask.replace('remove-whole-count-posts-', '');
       let i = 0;
-      for (const [number, _] of Object.entries(originalDatabase.whole_count_posts)) {
+      for (const [number, _] of Object.entries(database.whole_count_posts)) {
         i++;
         if (number != current_number) { continue; }
         await redis.del(`whole-count-${number}-posts-v${dbVersion}`);
-        current_number = Object.keys(originalDatabase.whole_count_posts)[i] ?? '';
+        current_number = Object.keys(database.whole_count_posts)[i] ?? '';
         await updateBackgroundTaskTracker(`remove-whole-count-posts-${current_number}`);
         if (!await taskScheduler.startNextTask()) { return false; }
       }
-      currentTask = await updateBackgroundTaskTracker(`remove-whole-count-users-${Object.keys(originalDatabase.whole_count_users)[0]}`);        
+      currentTask = await updateBackgroundTaskTracker(`remove-whole-count-users-${Object.keys(database.whole_count_users)[0]}`);        
     }
     if (currentTask.startsWith('remove-whole-count-users-')) {
       console.log(`${getDateTime()}: Removing whole count users from database.`);
       let current_number = currentTask.replace('remove-whole-count-users-', '');
       let i = 0;
-      for (const [number, _] of Object.entries(originalDatabase.whole_count_users)) {
+      for (const [number, _] of Object.entries(database.whole_count_users)) {
         i++;
         if (number != current_number) { continue; }
         await redis.del(`whole-count-${number}-users-v${dbVersion}`);
-        current_number = Object.keys(originalDatabase.whole_count_users)[i] ?? '';
+        current_number = Object.keys(database.whole_count_users)[i] ?? '';
         await updateBackgroundTaskTracker(`remove-whole-count-users-${current_number}`);
         if (!await taskScheduler.startNextTask()) { return false; }
       }
-      currentTask = await updateBackgroundTaskTracker(`remove-post-info-${Object.keys(originalDatabase.post_info)[0]}`);
+      currentTask = await updateBackgroundTaskTracker(`remove-post-info-${Object.keys(database.post_info)[0]}`);
     }
     if (currentTask.startsWith('remove-post-info-')) {
       console.log(`${getDateTime()}: Removing post info from database.`);
       let current_postId = currentTask.replace('remove-post-info-', '');
       let i = 0;
-      const nPosts = Object.keys(originalDatabase.post_info).length;
-      for (const [postId, _] of Object.entries(originalDatabase.post_info)) {
+      const nPosts = Object.keys(database.post_info).length;
+      for (const [postId, _] of Object.entries(database.post_info)) {
         i++;
         if (postId != current_postId) { continue; }
         if (i % 1000 == 0) { console.log(`${getDateTime()}: Deleting post info for ${i}/${nPosts} posts (${(i / nPosts * 100).toFixed(1)}%).`); }
         await redis.del(`post-info-${postId}-v${dbVersion}`);
-        current_postId = Object.keys(originalDatabase.post_info)[i] ?? '';
+        current_postId = Object.keys(database.post_info)[i] ?? '';
         await updateBackgroundTaskTracker(`remove-post-info-${current_postId}`);
         if (!await taskScheduler.startNextTask()) { return false; }
       }
-      currentTask = await updateBackgroundTaskTracker(`remove-other-streaks-of-${Object.keys(originalDatabase.other_streaks_of)[0]}`);
+      currentTask = await updateBackgroundTaskTracker(`remove-other-streaks-of-${Object.keys(database.other_streaks_of)[0]}`);
     }
     if (currentTask.startsWith('remove-other-streaks-of-')) {
       console.log(`${getDateTime()}: Removing other streaks of users from database.`);
       let current_username = currentTask.replace('remove-other-streaks-of-', '');
       let i = 0;
-      for (const [username, _] of Object.entries(originalDatabase.other_streaks_of)) {
+      for (const [username, _] of Object.entries(database.other_streaks_of)) {
         i++;
         if (username != current_username) { continue; }
         await redis.del(`other-streaks-of-${username}-v${dbVersion}`);
-        current_username = Object.keys(originalDatabase.other_streaks_of)[i] ?? '';
+        current_username = Object.keys(database.other_streaks_of)[i] ?? '';
         await updateBackgroundTaskTracker(`remove-other-streaks-of-${current_username}`);
         if (!await taskScheduler.startNextTask()) { return false; }
       }
@@ -355,128 +387,128 @@ export async function restoreDatabaseBackup(removeExistingData: boolean = true):
 
   if (currentTask == 'users') {
     console.log(`${getDateTime()}: Restoring users from backup.`);
-    if (originalDatabase.users.length > 0) {
-      await redis.zAdd(`users-v${dbVersion}`, ...originalDatabase.users.map((user: { member: string; score: number }) => ({member: user.member, score: user.score, })));
+    if (database.users.length > 0) {
+      await redis.zAdd(`users-v${dbVersion}`, ...database.users.map((user: { member: string; score: number }) => ({member: user.member, score: user.score, })));
     }
     currentTask = await updateBackgroundTaskTracker('posts');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'posts') {
     console.log(`${getDateTime()}: Restoring posts from backup.`);
-    if (originalDatabase.posts.length > 0) {
-      await redis.zAdd(`posts-v${dbVersion}`, ...originalDatabase.posts.map((post: { member: string; score: number }) => ({member: post.member, score: post.score, })));
+    if (database.posts.length > 0) {
+      await redis.zAdd(`posts-v${dbVersion}`, ...database.posts.map((post: { member: string; score: number }) => ({member: post.member, score: post.score, })));
     }
     currentTask = await updateBackgroundTaskTracker('early-deleted-posts');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'early-deleted-posts') {
     console.log(`${getDateTime()}: Restoring early-deleted posts from backup.`);
-    if (originalDatabase.early_deleted_posts.length > 0) {
-      await redis.zAdd(`early-deleted-posts-v${dbVersion}`, ...originalDatabase.early_deleted_posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+    if (database.early_deleted_posts.length > 0) {
+      await redis.zAdd(`early-deleted-posts-v${dbVersion}`, ...database.early_deleted_posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
     }
     currentTask = await updateBackgroundTaskTracker('current-streaks');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'current-streaks') {
     console.log(`${getDateTime()}: Restoring current streaks from backup.`);
-    if (originalDatabase.current_streaks.length > 0) {
-      await redis.zAdd(`current-streaks-v${dbVersion}`, ...originalDatabase.current_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+    if (database.current_streaks.length > 0) {
+      await redis.zAdd(`current-streaks-v${dbVersion}`, ...database.current_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
     }
     currentTask = await updateBackgroundTaskTracker('current-COAD-streaks');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'current-COAD-streaks') {
     console.log(`${getDateTime()}: Restoring current COAD streaks from backup.`);
-    if (originalDatabase.current_COAD_streaks.length > 0) {
-      await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, ...originalDatabase.current_COAD_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+    if (database.current_COAD_streaks.length > 0) {
+      await redis.zAdd(`current-COAD-streaks-v${dbVersion}`, ...database.current_COAD_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
     }
     currentTask = await updateBackgroundTaskTracker('post-streaks');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'post-streaks') {
     console.log(`${getDateTime()}: Restoring post streaks from backup.`);
-    if (originalDatabase.post_streaks.length > 0) {
-      await redis.zAdd(`post-streaks-v${dbVersion}`, ...originalDatabase.post_streaks.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+    if (database.post_streaks.length > 0) {
+      await redis.zAdd(`post-streaks-v${dbVersion}`, ...database.post_streaks.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
     }
     currentTask = await updateBackgroundTaskTracker('post-COAD-streaks');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'post-COAD-streaks') {
     console.log(`${getDateTime()}: Restoring post COAD streaks from backup.`);
-    if (originalDatabase.post_COAD_streaks.length > 0) {
-      await redis.zAdd(`post-COAD-streaks-v${dbVersion}`, ...originalDatabase.post_COAD_streaks.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+    if (database.post_COAD_streaks.length > 0) {
+      await redis.zAdd(`post-COAD-streaks-v${dbVersion}`, ...database.post_COAD_streaks.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
     }
     currentTask = await updateBackgroundTaskTracker('top-COAD-streaks');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'top-COAD-streaks') {
     console.log(`${getDateTime()}: Restoring top COAD streaks from backup.`);
-    if (originalDatabase.top_COAD_streaks.length > 0) {
-      await redis.zAdd(`top-COAD-streaks-v${dbVersion}`, ...originalDatabase.top_COAD_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+    if (database.top_COAD_streaks.length > 0) {
+      await redis.zAdd(`top-COAD-streaks-v${dbVersion}`, ...database.top_COAD_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
     }
     currentTask = await updateBackgroundTaskTracker('top-streaks');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'top-streaks') {
     console.log(`${getDateTime()}: Restoring top streaks from backup.`);
-    if (originalDatabase.top_streaks.length > 0) {
-      await redis.zAdd(`top-streaks-v${dbVersion}`, ...originalDatabase.top_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+    if (database.top_streaks.length > 0) {
+      await redis.zAdd(`top-streaks-v${dbVersion}`, ...database.top_streaks.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
     }
     currentTask = await updateBackgroundTaskTracker('post-upvotes');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'post-upvotes') {
     console.log(`${getDateTime()}: Restoring post upvotes from backup.`);
-    if (originalDatabase.post_upvotes.length > 0) {
-      await redis.zAdd(`post-upvotes-v${dbVersion}`, ...originalDatabase.post_upvotes.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+    if (database.post_upvotes.length > 0) {
+      await redis.zAdd(`post-upvotes-v${dbVersion}`, ...database.post_upvotes.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
     }
     currentTask = await updateBackgroundTaskTracker('post-comments');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'post-comments') {
     console.log(`${getDateTime()}: Restoring post comments from backup.`);
-    if (originalDatabase.post_comments.length > 0) {
-      await redis.zAdd(`post-comments-v${dbVersion}`, ...originalDatabase.post_comments.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+    if (database.post_comments.length > 0) {
+      await redis.zAdd(`post-comments-v${dbVersion}`, ...database.post_comments.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
     }
     currentTask = await updateBackgroundTaskTracker('posts-per-user');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'posts-per-user') {
     console.log(`${getDateTime()}: Restoring posts per user from backup.`);
-    if (originalDatabase.posts_per_user.length > 0) {
-      await redis.zAdd(`posts-per-user-v${dbVersion}`, ...originalDatabase.posts_per_user.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+    if (database.posts_per_user.length > 0) {
+      await redis.zAdd(`posts-per-user-v${dbVersion}`, ...database.posts_per_user.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
     }
     currentTask = await updateBackgroundTaskTracker('identical-digits-posts');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'identical-digits-posts') {
     console.log(`${getDateTime()}: Restoring identical digits posts from backup.`);
-    if (originalDatabase.identical_digits_posts.length > 0) {
-      await redis.zAdd(`identical-digits-posts-v${dbVersion}`, ...originalDatabase.identical_digits_posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+    if (database.identical_digits_posts.length > 0) {
+      await redis.zAdd(`identical-digits-posts-v${dbVersion}`, ...database.identical_digits_posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
     }
     currentTask = await updateBackgroundTaskTracker('identical-digits-users');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'identical-digits-users') {
     console.log(`${getDateTime()}: Restoring identical digits users from backup.`);
-    if (originalDatabase.identical_digits_users.length > 0) {
-      await redis.zAdd(`identical-digits-users-v${dbVersion}`, ...originalDatabase.identical_digits_users.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+    if (database.identical_digits_users.length > 0) {
+      await redis.zAdd(`identical-digits-users-v${dbVersion}`, ...database.identical_digits_users.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
     }
     currentTask = await updateBackgroundTaskTracker('palindrome-posts');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'palindrome-posts') {
     console.log(`${getDateTime()}: Restoring palindrome posts from backup.`);
-    if (originalDatabase.palindrome_posts.length > 0) {
-      await redis.zAdd(`palindrome-posts-v${dbVersion}`, ...originalDatabase.palindrome_posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
+    if (database.palindrome_posts.length > 0) {
+      await redis.zAdd(`palindrome-posts-v${dbVersion}`, ...database.palindrome_posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
     }
     currentTask = await updateBackgroundTaskTracker('palindrome-users');
     if (!await taskScheduler.startNextTask()) { return false; }
   }
   if (currentTask == 'palindrome-users') {
     console.log(`${getDateTime()}: Restoring palindrome users from backup.`);
-    if (originalDatabase.palindrome_users.length > 0) {
-      await redis.zAdd(`palindrome-users-v${dbVersion}`, ...originalDatabase.palindrome_users.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
+    if (database.palindrome_users.length > 0) {
+      await redis.zAdd(`palindrome-users-v${dbVersion}`, ...database.palindrome_users.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
     }
     currentTask = await updateBackgroundTaskTracker('current-count');
     if (!await taskScheduler.startNextTask()) { return false; }
@@ -485,10 +517,10 @@ export async function restoreDatabaseBackup(removeExistingData: boolean = true):
   // Single values
   if (currentTask == 'current-count') {
     console.log(`${getDateTime()}: Restoring current count from backup.`);
-    if (originalDatabase.current_count !== undefined) {
-      await redis.set(`current-count-v${dbVersion}`, originalDatabase.current_count.toString());
+    if (database.current_count !== undefined) {
+      await redis.set(`current-count-v${dbVersion}`, database.current_count.toString());
     }
-    currentTask = await updateBackgroundTaskTracker(`posts-of-${Object.keys(originalDatabase.posts_of)[0]}`);
+    currentTask = await updateBackgroundTaskTracker(`posts-of-${Object.keys(database.posts_of)[0]}`);
     if (!await taskScheduler.startNextTask()) { return false; }
   }
 
@@ -497,51 +529,51 @@ export async function restoreDatabaseBackup(removeExistingData: boolean = true):
     console.log(`${getDateTime()}: Restoring posts of users from backup.`);
     let current_username = currentTask.replace('posts-of-', '');
     let i = 0;
-    const nUsers = Object.keys(originalDatabase.posts_of).length;
-    for (const [username, posts] of Object.entries(originalDatabase.posts_of) as [string, { member: string; score: number }[]][]) {
+    const nUsers = Object.keys(database.posts_of).length;
+    for (const [username, posts] of Object.entries(database.posts_of) as [string, { member: string; score: number }[]][]) {
       i++;
       if (username != current_username) { continue; }
       if (i % 100 == 0) { console.log(`${getDateTime()}: Restoring posts of ${i}/${nUsers} users (${(i / nUsers * 100).toFixed(1)}%).`); }
       await redis.zAdd(`posts-of-${username}-v${dbVersion}`, ...posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
-      current_username = Object.keys(originalDatabase.posts_of)[i] ?? '';
+      current_username = Object.keys(database.posts_of)[i] ?? '';
       await updateBackgroundTaskTracker(`posts-of-${current_username}`);
       if (!await taskScheduler.startNextTask()) { return false; }
     }
-    currentTask = await updateBackgroundTaskTracker(`whole-count-posts-${Object.keys(originalDatabase.whole_count_posts)[0]}`);
+    currentTask = await updateBackgroundTaskTracker(`whole-count-posts-${Object.keys(database.whole_count_posts)[0]}`);
   }
   
   if (currentTask.startsWith('whole-count-posts-')) {
     console.log(`${getDateTime()}: Restoring whole count posts from backup.`);
     let current_number = currentTask.replace('whole-count-posts-', '');
     let i = 0;
-    const nNumbers = Object.keys(originalDatabase.whole_count_posts).length;
-    for (const [number, posts] of Object.entries(originalDatabase.whole_count_posts) as [string, { member: string; score: number }[]][]) {
+    const nNumbers = Object.keys(database.whole_count_posts).length;
+    for (const [number, posts] of Object.entries(database.whole_count_posts) as [string, { member: string; score: number }[]][]) {
       i++;
       if (number != current_number) { continue; }
       if (i % 100 == 0) { console.log(`${getDateTime()}: Restoring whole count posts for ${i}/${nNumbers} numbers (${(i / nNumbers * 100).toFixed(1)}%).`); }
       await redis.zAdd(`whole-count-${number}-posts-v${dbVersion}`, ...posts.map((post: { member: string; score: number }) => ({ member: post.member, score: post.score })));
-      current_number = Object.keys(originalDatabase.whole_count_posts)[i] ?? '';
+      current_number = Object.keys(database.whole_count_posts)[i] ?? '';
       await updateBackgroundTaskTracker(`whole-count-posts-${current_number}`);
       if (!await taskScheduler.startNextTask()) { return false; }
     }
-    currentTask = await updateBackgroundTaskTracker(`whole-count-users-${Object.keys(originalDatabase.whole_count_users)[0]}`);
+    currentTask = await updateBackgroundTaskTracker(`whole-count-users-${Object.keys(database.whole_count_users)[0]}`);
   }
 
   if (currentTask.startsWith('whole-count-users-')) {
     console.log(`${getDateTime()}: Restoring whole count users from backup.`);
     let current_number = currentTask.replace('whole-count-users-', '');
     let i = 0;
-    const nNumbers = Object.keys(originalDatabase.whole_count_users).length;
-    for (const [number, users] of Object.entries(originalDatabase.whole_count_users) as [string, { member: string; score: number }[]][]) {
+    const nNumbers = Object.keys(database.whole_count_users).length;
+    for (const [number, users] of Object.entries(database.whole_count_users) as [string, { member: string; score: number }[]][]) {
       i++;
       if (number != current_number) { continue; }
       if (i % 100 == 0) { console.log(`${getDateTime()}: Restoring whole count users for ${i}/${nNumbers} numbers (${(i / nNumbers * 100).toFixed(1)}%).`); }
       await redis.zAdd(`whole-count-${number}-users-v${dbVersion}`, ...users.map((user: { member: string; score: number }) => ({ member: user.member, score: user.score })));
-      current_number = Object.keys(originalDatabase.whole_count_users)[i] ?? '';
+      current_number = Object.keys(database.whole_count_users)[i] ?? '';
       await updateBackgroundTaskTracker(`whole-count-users-${current_number}`);
       if (!await taskScheduler.startNextTask()) { return false; }
     }
-    currentTask = await updateBackgroundTaskTracker(`post-info-${Object.keys(originalDatabase.post_info)[0]}`);
+    currentTask = await updateBackgroundTaskTracker(`post-info-${Object.keys(database.post_info)[0]}`);
   }
 
   // Group of single values
@@ -550,29 +582,29 @@ export async function restoreDatabaseBackup(removeExistingData: boolean = true):
     console.log(`${getDateTime()}: Restoring post info from backup.`);
     const nPosts = await redis.zCard(`posts-v${dbVersion}`);
     let i = 0;
-    for (const [postId, postInfo] of Object.entries(originalDatabase.post_info)) {
+    for (const [postId, postInfo] of Object.entries(database.post_info)) {
       i++;
       if (postId != current_postId) { continue; }
       const postInfoStr = String(postInfo);
       await redis.set(`post-info-${postId}-v${dbVersion}`, postInfoStr);
-      current_postId = Object.keys(originalDatabase.post_info)[i] ?? '';
+      current_postId = Object.keys(database.post_info)[i] ?? '';
       await updateBackgroundTaskTracker(`post-info-${current_postId}`);
       if (i % 100 == 0) { console.log(`${getDateTime()}: Restoring post info for ${i}/${nPosts} posts (${(i / nPosts * 100).toFixed(1)}%).`); }
       if (!await taskScheduler.startNextTask()) {  return false; }
     }
-    currentTask = await updateBackgroundTaskTracker(`other-streaks-of-${Object.keys(originalDatabase.other_streaks_of)[0]}`);
+    currentTask = await updateBackgroundTaskTracker(`other-streaks-of-${Object.keys(database.other_streaks_of)[0]}`);
   }
 
   if (currentTask.startsWith('other-streaks-of-')) {
     console.log(`${getDateTime()}: Restoring other streaks of users from backup.`);
     let current_username = currentTask.replace('other-streaks-of-', '');
     let i = 0;
-    for (const [username, otherStreaks] of Object.entries(originalDatabase.other_streaks_of)) {
+    for (const [username, otherStreaks] of Object.entries(database.other_streaks_of)) {
       i++;
       if (username != current_username) { continue; }
       const otherStreaksStr = String(otherStreaks);
       await redis.set(`other-streaks-of-${username}-v${dbVersion}`, otherStreaksStr);
-      current_username = Object.keys(originalDatabase.other_streaks_of)[i] ?? '';
+      current_username = Object.keys(database.other_streaks_of)[i] ?? '';
       await updateBackgroundTaskTracker(`other-streaks-of-${current_username}`);
       if (!await taskScheduler.startNextTask()) { return false; }
     }
