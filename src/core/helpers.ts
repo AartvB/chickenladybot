@@ -13,8 +13,8 @@ type OriginalDatabaseType = {
   'posts_of': {[username: string]: ScoreEntry[]};
   'whole_count_posts': Record<string, ScoreEntry[]>;
   'whole_count_users': Record<string, ScoreEntry[]>;
-  'post_info': {[postId: string]: {'post_number': number, 'author_name': string, 'timestamp': number}};
-  'other_streaks_of': {[username: string]: ScoreEntry[]};
+  'post_info': Record<string, string>;
+  'other_streaks_of': Record<string, string>;
   'early_deleted_posts': ScoreEntry[];
   'current_streaks': ScoreEntry[];
   'current_COAD_streaks': ScoreEntry[];
