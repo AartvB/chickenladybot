@@ -449,7 +449,7 @@ forms.post('/apply-rule', async (c) => {
         return c.json<UiResponse>({ showToast: 'This user broke selfie rules ' + nAllowedReminders + ' or more times in the past, so their post was removed.',}, 200);
       }
 
-      const commentText = 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the selfie rules in the future.'+await botExplainer();
+      const commentText = 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the selfie rules in the future.';
       const comment = await post.addComment({text: commentText, runAs: 'APP'});
       await comment.distinguish(true);
 
@@ -490,7 +490,7 @@ forms.post('/apply-rule', async (c) => {
         return c.json<UiResponse>({ showToast: 'This user broke political rules ' + nAllowedReminders + ' or more times in the past, so their post was removed.',}, 200);
       }
 
-      const commentText = 'This post didn\'t have the political flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the political rules in the future.'+await botExplainer();
+      const commentText = 'This post didn\'t have the political flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the political rules in the future.';
       const comment = await post.addComment({text: commentText, runAs: 'APP'});
       await comment.distinguish(true);
 

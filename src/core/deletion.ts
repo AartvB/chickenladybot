@@ -72,19 +72,8 @@ export async function removePostFromDatabase(postId: T3, early_removal: boolean)
 
 		let nMinutesUntilPostCounts = await settings.get('nMinutesUntilPostCounts');
 		if (nMinutesUntilPostCounts == undefined || typeof nMinutesUntilPostCounts != 'number') { nMinutesUntilPostCounts = 10; }
-		let message = `This post has been removed by you or a moderator within ${nMinutesUntilPostCounts} minutes of posting, or it has been flagged for special deletion because you contacted us through mod mail. Therefore this post does not count as your post for this day and does not contribute to your streak. Feel free to post again.`
+		let message = `This post has been removed by you, a moderator or reddit filters within ${nMinutesUntilPostCounts} minutes of posting, or it has been flagged for special deletion because you contacted us through mod mail. Therefore this post does not count as your post for this day and does not contribute to your streak. Feel free to post again.`
 
-		const post = await reddit.getPostById(postId as T3);
-		if (post) {
-			const startNextPostTimeframe = await redis.zScore(`start-next-post-timeframe-v${await DBVersion()}`, post.authorName);
-			const endNextPostTimeframe = await redis.zScore(`end-next-post-timeframe-v${await DBVersion()}`, post.authorName);
-			if (startNextPostTimeframe && endNextPostTimeframe) {
-				const now = new Date().valueOf();
-				if (endNextPostTimeframe > now && startNextPostTimeframe < now) {
-					message += ` If you create your next post later than ${formatDateTime(endNextPostTimeframe - now)} from now, you will lose your streak.`;
-				}
-			}
-		}
 		message += await botExplainer();
 		const comment = await reddit.submitComment({id: postId, text: message, runAs: 'APP'});
 		await comment.distinguish(true);

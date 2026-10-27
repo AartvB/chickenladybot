@@ -73,7 +73,7 @@ triggers.post('/on-post-delete', async (c) => {
   if (timestamp > Date.now() - nMinutesUntilPostCounts * 60000) { await addToEndOfQueue(`early-deleted-post-queue-v${dbVersion}`, postId); }
   else if (!(await isPostDeletedEarly(postId as T3))) { 
     await redis.zAdd(`late-deleted-post-queue-v${dbVersion}`, {member: postId, score: Date.now()});
-    let message = `This post has been removed by you or a moderator after ${nMinutesUntilPostCounts} minutes of posting it. Therefore this post will still count as your post for this day and keeps contributing to your streak.`
+    let message = `This post has been removed by you, a moderator or reddit filters after ${nMinutesUntilPostCounts} minutes of posting it. Therefore this post will still count as your post for this day and keeps contributing to your streak.`
 
     const post = await reddit.getPostById(postId as T3)
     if (post) {
