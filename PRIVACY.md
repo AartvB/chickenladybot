@@ -1,6 +1,6 @@
 # ChickenBotOnceADay — Privacy Policy
 
-**Last updated:** 26 October 2026
+**Last updated:** 27 October 2026
 
 ## 1. Overview
 
@@ -35,7 +35,7 @@ The bot relies on Reddit and Discord to provide its functionality. Their respect
 
 Data stored on Reddit is subject to Reddit's systems and security practices. No online service can guarantee absolute security or uninterrupted availability.
 
-## 6. Date Deletion
+## 6. Data Deletion
 
 If a user removes a post, their data will be removed from the bot's tracking systems after 21 days. The bot does not retain user data beyond what is necessary for its functionality.
 

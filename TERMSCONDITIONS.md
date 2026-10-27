@@ -1,12 +1,12 @@
 # ChickenBotOnceADay — Terms & Conditions
 
-**Last updated:** 26 October 2026
+**Last updated:** 27 October 2026
 
 ## 1. About the App
 
 ChickenBotOnceADay is a Reddit bot that supports daily counting, streak tracking, and related community features.
 
-By using the bot, you agree to these Terms & Conditions.
+By making posts in r/countwithchickenlady, you agree to these Terms & Conditions.
 
 ## 2. How the App Works
 

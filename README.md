@@ -44,6 +44,12 @@ The bot does the following things:
 ## Source
 The source code of the bot can be found here: https://github.com/AartvB/chickenladybot.
 
+## Terms and Conditions
+The bot has a Terms and Conditions document, which can be found in the TERMSCONDITIONS.md file.
+
+## Privacy Policy
+The bot has a Privacy Policy document, which can be found in the PRIVACY.md file.
+
 ## License
 MIT License
 
