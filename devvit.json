@@ -119,11 +119,11 @@
         "endpoint": "/internal/menu/view-bot-comment-info"
       },
       {
-        "label": "View post window",
-        "description": "See when you can next post to maintain your streak.",
+        "label": "Change notification subscription",
+        "description": "Change whether you want to receive notifications.",
         "location": "subreddit",
         "forUserType": "user",
-        "endpoint": "/internal/menu/view-post-window"
+        "endpoint": "/internal/menu/change-notification-subscription"
       },
       {
         "label": "Change settings",
@@ -150,7 +150,7 @@
     "viewBotCommentInfo": "/internal/form/view-bot-comment-info",
     "changeSettings": "/internal/form/change-settings",
     "applyRule": "/internal/form/apply-rule",
-    "viewPostWindow": "/internal/form/view-post-window"
+    "changeNotificationSubscription": "/internal/form/change-notification-subscription"
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",

@@ -113,12 +113,12 @@ triggers.post('/on-comment-create', async (c) => {
   const body = comment.body;
   if (body.toLowerCase().includes('!unsubscribe')) {
     await removeSubscription(username);
-    const reply = await comment.reply({text: `You have been unsubscribed from streak notifications. You will no longer receive notifications about your streak.${await botExplainer()}`, runAs: 'APP'});
+    const reply = await comment.reply({text: `You have been unsubscribed from streak notifications. You will no longer receive notifications about your streak. If you change your mind, you can always subscribe again using the !subscribe command.${await botExplainer()}`, runAs: 'APP'});
     await reply.distinguish(false);
   }
   else if (body.toLowerCase().includes('!subscribe')) {
     await addSubscription(username);
-    const reply = await comment.reply({text: `You have been subscribed to streak notifications. You will now receive notifications about your streak.${await botExplainer()}`, runAs: 'APP'});
+    const reply = await comment.reply({text: `You have been subscribed to streak notifications. You will now receive notifications about your streak. If you change your mind, you can always unsubscribe using the !unsubscribe command.${await botExplainer()}`, runAs: 'APP'});
     await reply.distinguish(false);
   }
   if (body.toLowerCase().includes('!viewpostwindow')) {

@@ -591,22 +591,22 @@ menu.post('/apply-rule', async (c) => {
   }, 200);
 });
 
-menu.post('/view-post-window', async (c) => {
+menu.post('/change-notification-subscription', async (c) => {
   // Allows a user to see when they can post again to maintain their streak
   const username = await reddit.getCurrentUsername();
-  if (!username) { return c.json<UiResponse>({ showToast: 'You must be logged in to view your post window.',}, 200); }  
+  if (!username) { return c.json<UiResponse>({ showToast: 'You must be logged in to change your notification subscription.',}, 200); }  
   return c.json<UiResponse>({
     showForm: {
-      name: 'viewPostWindow',
+      name: 'changeNotificationSubscription',
       form: {
         fields: [{
           name: 'subscribe',
-          label: 'Message me when I can post again',
+          label: 'Give me a notification when I can post again',
           type: 'boolean',
           defaultValue: await redis.zScore(`subscriptions-v${await DBVersion()}`, username) ? true : false,
           helpText: 'If checked, you will be notified when it is time to post again. Unchecking this box will unsubscribe you from these notifications.'
         }],
-        title: 'View post window',
+        title: 'Change notification subscription',
         description: (await viewPostWindow(username)).message,
         acceptLabel: 'Confirm',
         cancelLabel: 'Cancel'

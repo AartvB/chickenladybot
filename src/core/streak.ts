@@ -318,7 +318,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
           await reddit.sendPrivateMessage({to: 'Aartvb', subject: `[Chickenbot Message] from r/${subredditName}`, text: `The chickenbot received a message from the subreddit r/${subredditName} on ${message.created.toISOString()}. The message was:\n\n${message.body}`});
         }
       }
-      else {
+      else if (message.id.startsWith("t4_")) {
         const username = (await reddit.getUserById(user as `t2_${string}`))?.username;
         if (username != undefined) { 
           console.log(`${getDateTime()}: Received message from u/${username}`);
