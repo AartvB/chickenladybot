@@ -1,6 +1,6 @@
 import { T3 } from '@devvit/shared-types/tid.js';
 import { reddit, settings, redis } from '@devvit/web/server';
-import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly, getDateTime, formatDateTime } from './helpers';
+import { updateTargetPost, botExplainer, addToEndOfQueue, DBVersion, isPostDeleted, TaskScheduler, isPostDeletedEarly, getDateTime } from './helpers';
 
 export async function removePostFromDatabase(postId: T3, early_removal: boolean) {
 	console.log(`${getDateTime()}: Removing post ${postId} from the database. Early removal: ${early_removal}`);
