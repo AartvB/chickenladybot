@@ -601,7 +601,7 @@ menu.post('/change-notification-subscription', async (c) => {
       form: {
         fields: [{
           name: 'subscribe',
-          label: 'Give me a notification when I can post again',
+          label: 'Give me a notification when it is time to post again',
           type: 'boolean',
           defaultValue: await redis.zScore(`subscriptions-v${await DBVersion()}`, username) ? true : false,
           helpText: 'If checked, you will be notified when it is time to post again. Unchecking this box will unsubscribe you from these notifications.'

@@ -56,6 +56,7 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **selfie-flair-id**: The id of the selfie flair.
 - **political-flair-id**: The id of the political post flair.
 - **last-notification-time-missing-setting**: The timestamp of the last notification for missing one or more settings.
+- **update-message-notifications-sent**: Either 'true' or 'false'. If true, the bot has sent a notification about the update message to the subscribed users.
 
 ## Group of sorted sets
 - **posts-of-\[username\]**: Each of these sorted lists contains the post ids of this user. Score is the timestamp of posting.

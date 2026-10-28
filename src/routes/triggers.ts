@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
 import { reddit, redis, settings } from '@devvit/web/server';
-import { addSubscription, addToEndOfQueue, botExplainer, botHelp, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, updateTargetPost, viewPostWindow } from '../core/helpers';
+import { addSubscription, addToEndOfQueue, botExplainer, botHelp, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, sendPrivateMessage, updateTargetPost, viewPostWindow } from '../core/helpers';
   
 export const triggers = new Hono();
 
@@ -43,12 +43,13 @@ triggers.post('/on-app-upgrade', async (c) => {
   console.log('App upgraded in subreddit: r/' + input.subreddit?.name);
 
   const dbVersion = await redis.get('database-version');
-  if (input.subreddit?.name == 'countwithchickenlady') {
-    const latestBotDiscordMessageId = await redis.get(`latest-bot-discord-message-v${dbVersion}`);
-    if (!latestBotDiscordMessageId) { await redis.set(`latest-bot-discord-message-v${dbVersion}`, '1526346033603281062'); }
+  const updateMessageNotificationsSent = await redis.get(`update-message-notifications-sent`);
+
+  if (updateMessageNotificationsSent != 'true') {
+    const subscribedUsers = await redis.zRange(`subscriptions-v${dbVersion}`, 0, -1);
+    for (const username of subscribedUsers) { await sendPrivateMessage(username.member, `🐔 Notification system updated 🐔`, `Hi fellow chicken counter! There was a small hiccup, so it might be possible that the bot didn't respond to your messages, or didn't send you a notification message about your streak. This bug has been fixed now. It might be possible that you will get several messages now that should have been sent earlier, I'm sorry for the inconvenience. If all is well, the bot notification system should now work as expected! Thank you for your patience.`); }
+    await redis.set(`update-message-notifications-sent`, 'true');
   }
-  const streakFixTimestamp = await redis.get(`timestamp-streak-fix-v${dbVersion}`);
-  if (!streakFixTimestamp) { await redis.set(`timestamp-streak-fix-v${dbVersion}`, `${Date.now()}`); }
 
   return c.json<TriggerResponse>({status: 'success',},200);
 });

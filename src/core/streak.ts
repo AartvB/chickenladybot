@@ -1,5 +1,5 @@
 import { context, reddit, settings, redis } from '@devvit/web/server';
-import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime, addSubscription, removeSubscription, viewPostWindow, addToEndOfQueue, botExplainer, botHelp } from './helpers';
+import { isPostDeletedEarly, DBVersion, TaskScheduler, getDateTime, addSubscription, removeSubscription, viewPostWindow, addToEndOfQueue, botExplainer, botHelp, median, sendPrivateMessage } from './helpers';
 import { T3 } from '@devvit/shared-types/tid.js';
 
 async function calculateStreakForTimezone(earlierTimestamps: number[], otherStreakSources: undefined | {streak: number, source: string, timestamp: number}[], timestamp: number, timeZone: string): Promise<{ streak: number, CoadStreak: number, minTimestampNextPost: number | undefined, maxTimestampNextPost: number | undefined }> {
@@ -56,23 +56,23 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
   const yesterday = getPreviousDate(today);
 
   // Find all possible COAD streaks
-  const CoadDates: [string, number][] = [];
+  const CoadDates: [string, number, number][] = [];
   if (otherStreakSources != undefined) {
     for (const streak of otherStreakSources) {
       if (streak.source === 'COAD') {
         const timestampRaw = streak.timestamp;
         const timestamp = typeof timestampRaw == 'number' ? timestampRaw : parseInt(timestampRaw);
-        CoadDates.push([dateFormatter.format(new Date(timestamp)), streak.streak]);
+        CoadDates.push([dateFormatter.format(new Date(timestamp)), timestamp, streak.streak]);
       }
     }
   }
-  const LocalDates: [string, number][] = [];
+  const LocalDates: [string, number, number][] = [];
   if (otherStreakSources != undefined) {
     for (const streak of otherStreakSources) {
       if (streak.source === 'local') {
         const timestampRaw = streak.timestamp;
         const timestamp = typeof timestampRaw == 'number' ? timestampRaw : parseInt(timestampRaw);
-        LocalDates.push([dateFormatter.format(new Date(timestamp)), streak.streak]);
+        LocalDates.push([dateFormatter.format(new Date(timestamp)), timestamp, streak.streak]);
       }
     }
   }
@@ -95,12 +95,12 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
     else if (lastTimestamp != null) { // This was not the first post
       const previousDay = getPreviousDate(getDate(lastTimestamp));
       if (postDate == previousDay) { // The previous post was one day apart
-        for (const [date, streakValue] of CoadDates) {
+        for (const [date, _, streakValue] of CoadDates) {
           if (date === postDate) {
             CoadStreak = Math.max(CoadStreak, streakValue + streak);
           }
         }
-        for (const [date, streakValue] of LocalDates) {
+        for (const [date, _, streakValue] of LocalDates) {
           if (date === postDate) {
             editedStreak = Math.max(editedStreak, streakValue + streak);
           }
@@ -114,14 +114,16 @@ async function calculateStreakForTimezone(earlierTimestamps: number[], otherStre
 
     if (lastTimestamp != null) {
       const previousDay = getPreviousDate(getDate(lastTimestamp));
-      for (const [date, streakValue] of CoadDates) {
+      for (const [date, COADtimestamp, streakValue] of CoadDates) {
         if (date === previousDay) {
-          CoadStreak = Math.max(CoadStreak, streakValue + streak);
+          if (lastTimestamp > COADtimestamp) { CoadStreak = Math.max(CoadStreak, streakValue + streak); }
+          else { CoadStreak = Math.max(CoadStreak, streakValue + streak - 1); }
         }
       }
-      for (const [date, streakValue] of LocalDates) {
+      for (const [date, LOCALtimestamp, streakValue] of LocalDates) {
         if (date === previousDay) {
-          editedStreak = Math.max(editedStreak, streakValue + streak - 1);
+          if (lastTimestamp > LOCALtimestamp) { editedStreak = Math.max(editedStreak, streakValue + streak); }
+          else { editedStreak = Math.max(editedStreak, streakValue + streak - 1); }
         }
       }
     }
@@ -227,8 +229,23 @@ export async function handleStreak(): Promise<{ status: string; message: string;
       await redis.zAdd(`start-next-post-timeframe-v${dbVersion}`, { member: username, score: streak.minTimestampNextPost });
       await redis.zAdd(`end-next-post-timeframe-v${dbVersion}`, { member: username, score: streak.maxTimestampNextPost });
       if (isSubscribed) {
-        if (streak.minTimestampNextPost > Date.now()) { await redis.zAdd(`first-notifications-list-v${dbVersion}`, { member: username, score: streak.minTimestampNextPost }); }
-        if (streak.maxTimestampNextPost - 5 * 60 * 60 * 1000 > Date.now()) { await redis.zAdd(`second-notifications-list-v${dbVersion}`, { member: username, score: streak.maxTimestampNextPost - 5 * 60 * 60 * 1000 }); }
+        // Send a notification 15 minutes before the median time of posting in the last 10 days, and another notification 5 hours before the end of the posting window. If the user is not subscribed, then don't send any notifications.
+        const last_10_days = await redis.zRange(`posts-of-${username}-v${dbVersion}`, -1 * Math.min(10, Math.max(streak.streak, streak.CoadStreak)), -1);
+        const DAY = 24 * 60 * 60 * 1000;
+        const millisecondsOfDay = last_10_days.map(t => { return ((t.score % DAY) + DAY) % DAY; });
+        const typicalTime = median(millisecondsOfDay);
+        const last = last_10_days[last_10_days.length-1];
+        let firstNotificationTime = streak.minTimestampNextPost;
+        if (last != undefined && typicalTime != undefined) {
+          const lastMillisecondsOfDay = ((last.score % DAY) + DAY) % DAY;
+          firstNotificationTime = last.score + DAY - lastMillisecondsOfDay + typicalTime - 15 * 60 * 1000; // 15 minutes before the typical time of day
+          if (firstNotificationTime < streak.minTimestampNextPost) { firstNotificationTime = streak.minTimestampNextPost; }
+          if (firstNotificationTime > streak.maxTimestampNextPost - 12 * 60 * 60 * 1000) { firstNotificationTime = streak.maxTimestampNextPost - 12 * 60 * 60 * 1000; }
+        }
+        const secondNotificationTime = streak.maxTimestampNextPost - 5 * 60 * 60 * 1000; // 5 hours before the end of the posting window
+
+        if (firstNotificationTime > Date.now()) { await redis.zAdd(`first-notifications-list-v${dbVersion}`, { member: username, score: firstNotificationTime }); }
+        if (secondNotificationTime > Date.now()) { await redis.zAdd(`second-notifications-list-v${dbVersion}`, { member: username, score: secondNotificationTime }); }
       }
     }
     else {
@@ -258,7 +275,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     const userToRemind = (await redis.zRange(`first-notifications-list-v${dbVersion}`, 0, now, { by: 'score' }))[0];
     if (userToRemind == undefined) { break; }
     const currentStreak = await redis.zScore(`current-streaks-v${dbVersion}`, userToRemind.member);
-    await reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
+    await sendPrivateMessage(userToRemind.member, `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`);
     await redis.zRem(`first-notifications-list-v${dbVersion}`, [userToRemind.member]);
   }
   while (true) {
@@ -266,7 +283,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     const userToRemind = (await redis.zRange(`second-notifications-list-v${dbVersion}`, 0, now, { by: 'score' }))[0];
     if (userToRemind == undefined) { break; }
     const currentStreak = await redis.zScore(`current-streaks-v${dbVersion}`, userToRemind.member);
-    await reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! You have 5 hours to post before your streak is broken. We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
+    await sendPrivateMessage(userToRemind.member, `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! You have 5 hours to post before your streak is broken. We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`);
     await redis.zRem(`second-notifications-list-v${dbVersion}`, [userToRemind.member]);
   }
   while (true) {
@@ -274,7 +291,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
     const userToRemind = (await redis.zRange(`untimed-notifications-list-v${dbVersion}`, 0, now, { by: 'score' }))[0];
     if (userToRemind == undefined) { break; }
     const currentStreak = await redis.zScore(`current-streaks-v${dbVersion}`, userToRemind.member);
-    await reddit.sendPrivateMessage({to: userToRemind.member, subject: `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, text: `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`});
+    await sendPrivateMessage(userToRemind.member, `🐔 Post to r/${context.subredditName} to maintain your streak! 🐔`, `Hey! Just a little reminder to visit r/${context.subredditName} and keep your ${currentStreak == undefined ? '' : `${currentStreak}-day ` }streak going! We'd love to see you there. Stay fabulous, stay counting, and remember: you are egg-straordinary! To unsubscribe from these notifications, respond with "!unsubscribe" in this conversation.`);
     await redis.zRem(`untimed-notifications-list-v${dbVersion}`, [userToRemind.member]);
   }
 
@@ -286,7 +303,7 @@ export async function handleStreak(): Promise<{ status: string; message: string;
       const user = await reddit.getUserById(id.member as `t2_${string}`);
       if (user != undefined) {
         const username = user.username;
-        await reddit.sendPrivateMessage({to: username, subject: `🐔 Your streak post window for r/${context.subredditName} 🐔`, text: (await viewPostWindow(username)).message});
+        await sendPrivateMessage(username, `🐔 Your streak post window for r/${context.subredditName} 🐔`, (await viewPostWindow(username)).message);
       }
     }
     else if (id.member.startsWith("t1_")) {
@@ -314,29 +331,29 @@ export async function handleStreak(): Promise<{ status: string; message: string;
         const subredditName = (await reddit.getSubredditInfoById(user as `t5_${string}`)).name;
         if (subredditName != undefined) { 
           console.log(`${getDateTime()}: Received message from r/${subredditName}`);
-          await reddit.sendPrivateMessage({to: 'Aartvb', subject: `[Chickenbot Message] from r/${subredditName}`, text: `The chickenbot received a message from the subreddit r/${subredditName} on ${message.created.toISOString()}. The message was:\n\n${message.body}`});
+          await sendPrivateMessage('Aartvb', `[Chickenbot Message] from r/${subredditName}`, `The chickenbot received a message from the subreddit r/${subredditName} on ${message.created.toISOString()}. The message was:\n\n${message.body}`);
         }
       }
       else if (message.id.startsWith("t4_")) {
         const username = (await reddit.getUserById(user as `t2_${string}`))?.username;
         if (username != undefined) { 
           console.log(`${getDateTime()}: Received message from u/${username}`);
-          await reddit.sendPrivateMessage({to: 'Aartvb', subject: `[Chickenbot Message] from u/${username}`, text: `The chickenbot received a message from the user u/${username} on ${message.created.toISOString()}. The message was:\n\n${message.body}`});
+          await sendPrivateMessage('Aartvb', `[Chickenbot Message] from u/${username}`, `The chickenbot received a message from the user u/${username} on ${message.created.toISOString()}. The message was:\n\n${message.body}`);
           if (message.body.toLowerCase().includes('!unsubscribe')) { 
             await removeSubscription(username);
-            await reddit.sendPrivateMessage({to: username, subject: `🐔 Unsubscribed from r/${context.subredditName} streak notifications 🐔`, text: `You have been unsubscribed from streak notifications for r/${context.subredditName}. You will no longer receive notifications about your streak. If you want to subscribe again, respond with "!subscribe" in this conversation.`});
+            await sendPrivateMessage(username, `🐔 Unsubscribed from r/${context.subredditName} streak notifications 🐔`, `You have been unsubscribed from streak notifications for r/${context.subredditName}. You will no longer receive notifications about your streak. If you want to subscribe again, respond with "!subscribe" in this conversation.`);
           }
           else if (message.body.toLowerCase().includes('!subscribe')) {
             await addSubscription(username);
-            await reddit.sendPrivateMessage({to: username, subject: `🐔 Subscribed to r/${context.subredditName} streak notifications 🐔`, text: `You have been subscribed to streak notifications for r/${context.subredditName}. You will receive notifications about your streak. If you want to unsubscribe, respond with "!unsubscribe" in this conversation.`});
+            await sendPrivateMessage(username, `🐔 Subscribed to r/${context.subredditName} streak notifications 🐔`, `You have been subscribed to streak notifications for r/${context.subredditName}. You will receive notifications about your streak. If you want to unsubscribe, respond with "!unsubscribe" in this conversation.`);
           }
           if (message.body.toLowerCase().includes('!viewpostwindow')) {
             const postWindow = await viewPostWindow(username);
-            if (postWindow.success) { await reddit.sendPrivateMessage({to: username, subject: `🐔 Your streak post window for r/${context.subredditName} 🐔`, text: (await viewPostWindow(username)).message});   }
+            if (postWindow.success) { await sendPrivateMessage(username, `🐔 Your streak post window for r/${context.subredditName} 🐔`, (await viewPostWindow(username)).message);   }
             else { await addToEndOfQueue(`view-post-window-queue-v${dbVersion}`, user); }
           }
           if (message.body.toLowerCase().includes('!help')) {
-            await reddit.sendPrivateMessage({to: username, subject: `🐔 Help for ChickenBotOnceADay 🐔`, text: await botHelp()});
+            await sendPrivateMessage(username, `🐔 Help for ChickenBotOnceADay 🐔`, await botHelp());
           }
         }
       }

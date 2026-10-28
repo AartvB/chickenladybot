@@ -98,6 +98,38 @@ export async function viewPostWindow(username: string): Promise<{message: string
   return {message: postWindowMessage, success: success};
 }
 
+export function median(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+
+  if (sorted.length % 2 == 0) {
+    const firstNumber = sorted[mid - 1];
+    const secondNumber = sorted[mid];
+    if (firstNumber == undefined || secondNumber == undefined) { return undefined; }
+    return (firstNumber + secondNumber) / 2;
+  }
+  else { return sorted[mid]; }
+}
+
+export async function sendPrivateMessage(username: string, subject: string, body: string): Promise<boolean> {
+  try {
+    await reddit.sendPrivateMessage({to: username, subject: subject, text: body});
+    return true
+  }
+  catch (error) {
+    console.error(`${getDateTime()}: Failed to send private message to u/${username}. Error: ${error}`);
+    if (username != 'Aartvb') {
+      await sendPrivateMessage('Aartvb', `[Chickenbot Message] Failed to send private message to u/${username}`, `The chickenbot failed to send a private message to the user u/${username}. The error was:\n\n${error}\n\nThe message that was attempted to be sent was:\n\nSubject: ${subject}\n\nBody: ${body}`);
+    }
+    if (String(error).includes('NOT_WHITELISTED_BY_USER_MESSAGE')) { 
+      await reddit.modMail.createConversation({body: `Hi u/${username},\n\nYou have received a private message from the u/ChickenBotOnceADay bot (probably a notification reminder for a notification subscription), but it was not delivered because you have not whitelisted the bot. Please whitelist the bot to receive future messages. You can do this, by sending a private message to the bot account u/ChickenBotOnceADay. The bot will then be able to send you messages.${await botExplainer()}`, subject: `u/ChickenBotOnceADay Bot permission issue`, subredditName: context.subredditName, to: `u/${username}`});
+    }
+    return false;
+  }
+}
+
 export async function updateTargetPost() {
   // Update the post that tells the user what the correct next number is.
   const dbVersion = await DBVersion();
