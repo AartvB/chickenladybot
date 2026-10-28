@@ -42,14 +42,7 @@ triggers.post('/on-app-upgrade', async (c) => {
   const input = await c.req.json<OnAppUpgradeRequest>();
   console.log('App upgraded in subreddit: r/' + input.subreddit?.name);
 
-  const dbVersion = await redis.get('database-version');
-  const updateMessageNotificationsSent = await redis.get(`update-message-notifications-sent`);
-
-  if (updateMessageNotificationsSent != 'true') {
-    const subscribedUsers = await redis.zRange(`subscriptions-v${dbVersion}`, 0, -1);
-    for (const username of subscribedUsers) { await sendPrivateMessage(username.member, `🐔 Notification system updated 🐔`, `Hi fellow chicken counter! There was a small hiccup, so it might be possible that the bot didn't respond to your messages, or didn't send you a notification message about your streak. This bug has been fixed now. It might be possible that you will get several messages now that should have been sent earlier, I'm sorry for the inconvenience. If all is well, the bot notification system should now work as expected! Thank you for your patience.`); }
-    await redis.set(`update-message-notifications-sent`, 'true');
-  }
+//  const dbVersion = await redis.get('database-version');
 
   return c.json<TriggerResponse>({status: 'success',},200);
 });
