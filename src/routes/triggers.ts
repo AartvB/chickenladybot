@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
 import { reddit, redis, settings } from '@devvit/web/server';
-import { addSubscription, addToEndOfQueue, botExplainer, botHelp, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, sendPrivateMessage, updateTargetPost, viewPostWindow } from '../core/helpers';
+import { addSubscription, addToEndOfQueue, botExplainer, botHelp, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, updateTargetPost, viewPostWindow } from '../core/helpers';
   
 export const triggers = new Hono();
 

@@ -124,7 +124,10 @@ export async function sendPrivateMessage(username: string, subject: string, body
       await sendPrivateMessage('Aartvb', `[Chickenbot Message] Failed to send private message to u/${username}`, `The chickenbot failed to send a private message to the user u/${username}. The error was:\n\n${error}\n\nThe message that was attempted to be sent was:\n\nSubject: ${subject}\n\nBody: ${body}`);
     }
     if (String(error).includes('NOT_WHITELISTED_BY_USER_MESSAGE')) { 
-      await reddit.modMail.createConversation({body: `Hi u/${username},\n\nYou have received a private message from the u/ChickenBotOnceADay bot (probably a notification reminder for a notification subscription), but it was not delivered because you have not whitelisted the bot. Please whitelist the bot to receive future messages. You can do this, by sending a private message to the bot account u/ChickenBotOnceADay. The bot will then be able to send you messages.${await botExplainer()}`, subject: `u/ChickenBotOnceADay Bot permission issue`, subredditName: context.subredditName, to: `u/${username}`});
+      const conv = await reddit.modMail.createConversation({body: `Hi u/${username},\n\nYou have received a private message from the u/ChickenBotOnceADay bot (probably a notification reminder for a notification subscription), but it was not delivered because you have not whitelisted the bot. Please whitelist the bot to receive future messages. You can do this, by sending a private message to the bot account u/ChickenBotOnceADay. The bot will then be able to send you messages.${await botExplainer()}`, subject: `u/ChickenBotOnceADay Bot permission issue`, subredditName: context.subredditName, to: `u/${username}`, isAuthorHidden: true});
+      if (conv.conversation.id != undefined) {
+        await reddit.modMail.archiveConversation(conv.conversation.id);
+      }
     }
     return false;
   }
