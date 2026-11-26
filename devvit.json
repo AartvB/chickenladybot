@@ -156,7 +156,8 @@
     "onAppInstall": "/internal/triggers/on-app-install",
     "onAppUpgrade": "/internal/triggers/on-app-upgrade",
     "onPostDelete": "/internal/triggers/on-post-delete",
-    "onCommentCreate": "/internal/triggers/on-comment-create"
+    "onCommentCreate": "/internal/triggers/on-comment-create",
+    "onModMail": "/internal/triggers/on-mod-mail"
   },
   "scripts": {
     "build": "vite build",

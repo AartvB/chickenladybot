@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { OnAppInstallRequest, OnAppUpgradeRequest, OnPostDeleteRequest, T3, TriggerResponse } from '@devvit/web/shared';
-import { reddit, redis, settings } from '@devvit/web/server';
-import { addSubscription, addToEndOfQueue, botExplainer, botHelp, DBVersion, formatDateTime, isPostDeletedEarly, removeSubscription, updateTargetPost, viewPostWindow } from '../core/helpers';
+import { context, reddit, redis, settings } from '@devvit/web/server';
+import { addSubscription, addToEndOfQueue, botExplainer, botHelp, DBVersion, formatDateTime, getDateTime, isPostDeletedEarly, remindModsAboutMissingSettings, removeSubscription, updateTargetPost, viewPostWindow } from '../core/helpers';
   
 export const triggers = new Hono();
 
@@ -128,5 +128,61 @@ triggers.post('/on-comment-create', async (c) => {
     await reply.distinguish(false);
   }
 
+  const isShadowbanned = await redis.zScore(`shadowbanned-users-v${await DBVersion()}`, username);
+  if (isShadowbanned) {
+    await comment.remove();
+    const removalReasonId = await redis.get(`shadowban-removal-reason-id-v${await DBVersion()}`);
+    if (removalReasonId == undefined) { await remindModsAboutMissingSettings(`The bot has removed a comment but was unable to add a removal reason. Consider adding removal reasons to the bot settings. This can be done by going to the bot settings in the subreddit menu and selecting the appropriate removal reasons.`, 'Missing removal reason'); }
+    else { await comment.addRemovalNote({reasonId: removalReasonId, modNote: 'Comment removed by bot because the user is shadowbanned.'}); }
+  }
+
+  return c.json<TriggerResponse>({status: 'success',}, 200);
+});
+
+triggers.post('/on-mod-mail', async (c) => {
+  const input = await c.req.json();
+  const username = input.messageAuthor?.name;
+  if (!username) { return c.json<TriggerResponse>({status: 'success',}, 200); }
+  const author = await reddit.getUserByUsername(username);
+  if (!author) { return c.json<TriggerResponse>({status: 'success',}, 200); }
+  const isMod = (await author.getModPermissionsForSubreddit(context.subredditName)).length > 0;
+  let messageId = input.messageId;
+  messageId = messageId.replace('ModmailMessage_', '');
+  let conversationId = input.conversationId;
+  conversationId = conversationId.replace('ModmailConversation_', '');
+  if (isMod) {
+    const messages = (await reddit.modMail.getConversation({conversationId: conversationId})).conversation?.messages;
+    if (!messages) { return c.json<TriggerResponse>({status: 'success',}, 200); }
+    const message = messages[messageId];
+    if (!message) { return c.json<TriggerResponse>({status: 'success',}, 200); }
+    const body = message.body;
+    if (!body) { return c.json<TriggerResponse>({status: 'success',}, 200); }
+    const participant = (await reddit.modMail.getConversation({conversationId: conversationId})).conversation?.participant?.name;
+    if (!participant) { return c.json<TriggerResponse>({status: 'success',}, 200); }
+    if (body.toLowerCase().includes('!shadowmute')) {
+      await addToEndOfQueue(`shadowmuted-users-v${await DBVersion()}`, participant);
+      await reddit.modMail.reply({conversationId: conversationId, body: `u/${participant} has been shadowmuted. This means that their mod mail messages will be automatically archived without notification.`, isInternal: true});
+    }
+    if (body.toLowerCase().includes('!shadowban')) {
+      await addToEndOfQueue(`shadowbanned-users-v${await DBVersion()}`, participant);
+      await reddit.modMail.reply({conversationId: conversationId, body: `u/${participant} has been shadowbanned. This means that their posts and comments will be automatically removed without notification.`, isInternal: true});
+    }
+    if (body.toLowerCase().includes('!unshadowmute')) {
+      await redis.zRem(`shadowmuted-users-v${await DBVersion()}`, [participant]);
+      await reddit.modMail.reply({conversationId: conversationId, body: `u/${participant} has been unshadowmuted. This means that their mod mail messages will no longer be automatically archived without notification.`, isInternal: true});
+    }
+    if (body.toLowerCase().includes('!unshadowban')) {
+      await redis.zRem(`shadowbanned-users-v${await DBVersion()}`, [participant]);
+      await reddit.modMail.reply({conversationId: conversationId, body: `u/${participant} has been unshadowbanned. This means that their posts and comments will no longer be automatically removed without notification.`, isInternal: true});
+    }
+  }
+  else {
+    const isShadowmuted = await redis.zScore(`shadowmuted-users-v${await DBVersion()}`, username);
+    console.log(`${getDateTime()}: Received mod mail message from u/${username} with messageId ${messageId} in conversationId ${conversationId}. Message body: ${input.body}. Is shadowmuted: ${isShadowmuted}`);
+    if (isShadowmuted) {
+      await reddit.modMail.reply({conversationId: conversationId, body: `This mod mail message has been automatically archived because u/${username} has been shadowmuted. This means that their mod mail messages will be automatically archived without notification.`, isInternal: true});
+      await reddit.modMail.archiveConversation(conversationId);
+    }
+  }
   return c.json<TriggerResponse>({status: 'success',}, 200);
 });

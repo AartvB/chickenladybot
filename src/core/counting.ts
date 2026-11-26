@@ -102,6 +102,15 @@ export async function handleNewPosts(): Promise<{ status: string; message: strin
 
     if (await isPostDeleted(post)) { await redis.zRem(`new-post-queue-v${dbVersion}`, [postId]); continue; }
 
+    const isShadowbanned = await redis.zScore(`shadowbanned-users-v${await DBVersion()}`, post.authorName);
+    if (isShadowbanned) {
+      await post.remove();
+      const removalReasonId = await redis.get(`shadowban-removal-reason-id-v${await DBVersion()}`);
+      if (removalReasonId == undefined) { await remindModsAboutMissingSettings(`The bot has removed a post but was unable to add a removal reason. Consider adding removal reasons to the bot settings. This can be done by going to the bot settings in the subreddit menu and selecting the appropriate removal reasons.`, 'Missing removal reason'); }
+      else { await post.addRemovalNote({reasonId: removalReasonId, modNote: 'Post removed by bot because the user is shadowbanned.'}); }
+      continue;
+    }
+
     const postTitle = post.title;
     console.log(`${getDateTime()}: Processing new post ${postId} with title '${postTitle}' by user ${post.authorName}`);
     if (/^\d+$/.test(postTitle)) {

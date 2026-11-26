@@ -532,6 +532,14 @@ menu.post('/change-settings', async (c) => {
           defaultValue: [defaultSelfieRemovalReasonId]      
         },
         {
+          name: 'shadowbanRemovalReasonId',
+          label: 'Removal reason for shadowban rule',
+          type: 'select',
+          options: removalReasons.map((reason) => ({ label: reason.title, value: reason.id })),
+          helpText: 'Select the removal reason that will be used when a user is shadowbanned.',
+          defaultValue: ['none']
+        },
+        {
           name: 'selfieFlairId',
           label: 'Selfie flair',
           type: 'select',

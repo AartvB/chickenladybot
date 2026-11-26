@@ -21,6 +21,10 @@ This code is shared to give people insight in how this bot works. You are free t
 - View bot comment info: Allows moderator to see which moderators created and edited the bot comments, and what edits they made.
 - Comment as bot: Allows moderators to comment to a comment using the bot account.
 
+### Modmail usecases
+- Shadowmute user: Sending !shadowmute in a modmail message will allow moderators to shadowmute the user they are sending it to. This means that any modmail messages sent by the user will not be automatically archived without the user knowing. The user will not be able to see that they are shadowmuted, and will not be able to see that their messages are being archived. To cancel a shadowmute, moderators can send !unshadowmute in a modmail message to this user.
+- Shadowban user: Sending !shadowban in a modmail message will allow moderators to shadowban the user they are sending it to. This means that any posts or comments made by the user will not be automatically removed without notification. To cancel a shadowban, moderators can send !unshadowban in a modmail message to this user.
+
 ## Usage for users
 ### Subreddit usecases
 - View post window: A user can see when they should post again to maintain their streak. Users can also subscribe to streak notifications here.

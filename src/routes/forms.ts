@@ -355,13 +355,14 @@ forms.post('/view-bot-comment-info', async (c) => {
 
 forms.post('/change-settings', async (c) => {
   console.log(`${getDateTime()}: Received request to change settings.`);
-  const values = await c.req.json<{multiplePostsPerDayReasonId: string, wrongTitleReasonId: string, selfieRemovalReasonId: string, selfieFlairId: string, politicalFlairId: string}>();
+  const values = await c.req.json<{multiplePostsPerDayReasonId: string, wrongTitleReasonId: string, selfieRemovalReasonId: string, shadowbanRemovalReasonId: string, selfieFlairId: string, politicalFlairId: string}>();
   const multiplePostsPerDayReasonId = Array.isArray(values.multiplePostsPerDayReasonId) ? values.multiplePostsPerDayReasonId[0] : values.multiplePostsPerDayReasonId;
   const wrongTitleReasonId = Array.isArray(values.wrongTitleReasonId) ? values.wrongTitleReasonId[0] : values.wrongTitleReasonId;
   const selfieRemovalReasonId = Array.isArray(values.selfieRemovalReasonId) ? values.selfieRemovalReasonId[0] : values.selfieRemovalReasonId;
+  const shadowbanRemovalReasonId = Array.isArray(values.shadowbanRemovalReasonId) ? values.shadowbanRemovalReasonId[0] : values.shadowbanRemovalReasonId;
   const selfieFlairId = Array.isArray(values.selfieFlairId) ? values.selfieFlairId[0] : values.selfieFlairId;
   const politicalFlairId = Array.isArray(values.politicalFlairId) ? values.politicalFlairId[0] : values.politicalFlairId;
-  if (!multiplePostsPerDayReasonId || !wrongTitleReasonId || !selfieRemovalReasonId || !selfieFlairId || !politicalFlairId) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
+  if (!multiplePostsPerDayReasonId || !wrongTitleReasonId || !selfieRemovalReasonId || !shadowbanRemovalReasonId || !selfieFlairId || !politicalFlairId) { return c.json<UiResponse>({ showToast: 'Missing required fields. Please try again.',}, 200); }
   const subreddit = await reddit.getCurrentSubreddit();
 
   const removalReasons = await subreddit.getRemovalReasons();
@@ -374,6 +375,7 @@ forms.post('/change-settings', async (c) => {
   if (!removalReasons.some(reason => reason.id == multiplePostsPerDayReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for multiple posts per day. Please try again.',}, 200); }
   if (!removalReasons.some(reason => reason.id == wrongTitleReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for wrong title. Please try again.',}, 200); }
   if (!removalReasons.some(reason => reason.id == selfieRemovalReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for selfie rule. Please try again.',}, 200); }
+  if (!removalReasons.some(reason => reason.id == shadowbanRemovalReasonId)) { return c.json<UiResponse>({ showToast: 'Invalid removal reason ID for shadowban rule. Please try again.',}, 200); }
   if (!flairs.some(flair => flair.value == selfieFlairId)) { return c.json<UiResponse>({ showToast: 'Invalid flair ID for selfie. Please try again.',}, 200); }
   if (!flairs.some(flair => flair.value == politicalFlairId)) { return c.json<UiResponse>({ showToast: 'Invalid flair ID for political. Please try again.',}, 200); }
 
@@ -383,14 +385,16 @@ forms.post('/change-settings', async (c) => {
   else { await redis.set(`wrong-title-removal-reason-id-v${await DBVersion()}`, wrongTitleReasonId); }
   if (selfieRemovalReasonId == 'none') { await redis.del(`selfie-removal-reason-id-v${await DBVersion()}`); }
   else { await redis.set(`selfie-removal-reason-id-v${await DBVersion()}`, selfieRemovalReasonId); }
+  if (shadowbanRemovalReasonId == 'none') { await redis.del(`shadowban-removal-reason-id-v${await DBVersion()}`); }
+  else { await redis.set(`shadowban-removal-reason-id-v${await DBVersion()}`, shadowbanRemovalReasonId); }
   if (selfieFlairId == 'none') { await redis.del(`selfie-flair-id-v${await DBVersion()}`); }
   else { await redis.set(`selfie-flair-id-v${await DBVersion()}`, selfieFlairId); }
   if (politicalFlairId == 'none') { await redis.del(`political-flair-id-v${await DBVersion()}`); }
   else { await redis.set(`political-flair-id-v${await DBVersion()}`, politicalFlairId); }
 
-  if (multiplePostsPerDayReasonId != 'none' && wrongTitleReasonId != 'none' && selfieRemovalReasonId != 'none' && selfieFlairId != 'none' && politicalFlairId != 'none') { await redis.del(`last-notification-time-missing-setting-v${await DBVersion()}`); }
+  if (multiplePostsPerDayReasonId != 'none' && wrongTitleReasonId != 'none' && selfieRemovalReasonId != 'none' && shadowbanRemovalReasonId != 'none' && selfieFlairId != 'none' && politicalFlairId != 'none') { await redis.del(`last-notification-time-missing-setting-v${await DBVersion()}`); }
 
-  console.log(`${getDateTime()}: Settings updated: multiplePostsPerDayReasonId=${multiplePostsPerDayReasonId}, wrongTitleReasonId=${wrongTitleReasonId}, selfieRemovalReasonId=${selfieRemovalReasonId}, selfieFlairId=${selfieFlairId}, politicalFlairId=${politicalFlairId}`);
+  console.log(`${getDateTime()}: Settings updated: multiplePostsPerDayReasonId=${multiplePostsPerDayReasonId}, wrongTitleReasonId=${wrongTitleReasonId}, selfieRemovalReasonId=${selfieRemovalReasonId}, shadowbanRemovalReasonId=${shadowbanRemovalReasonId}, selfieFlairId=${selfieFlairId}, politicalFlairId=${politicalFlairId}`);
   return c.json<UiResponse>({ showToast: 'Settings updated successfully.' }, 200);
 });
 

@@ -32,6 +32,8 @@ Every key has the addition of '-vx' at the end, with x being a number (so -v1, -
 - **identical-digits-users**: Contains the user ids of users that posted posts with identical digits. The score is the number of posts they have in this format.
 - **palindrome-posts**: Contains the post ids of the posts that are a palindrome. The score is the title of the post.
 - **palindrome-users**: Contains the user ids of users that posted palindrome posts. The score is the number of posts they have in this format.
+- **shadowmuted-users**: Contains the user ids of users that have been shadowmuted. The score is an integer, counting up.
+- **shadowbanned-users**: Contains the user ids of users that have been shadowbanned. The score is an integer, counting up.
 
 ## Single values
 - **timestamp-streak-fix**: The timestamp of the time where the streak bug was fixed.
