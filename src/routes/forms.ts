@@ -435,9 +435,6 @@ forms.post('/apply-rule', async (c) => {
     const isSelfieFlair = flair?.templateId == selfieFlairId;
     const isSpoiled = post.isSpoiler();
 
-    if (!isSelfieFlair) { await reddit.setPostFlair({subredditName: context.subredditName, postId: postId as T3, flairTemplateId: selfieFlairId}); }
-    if (!isSpoiled) { await post.markAsSpoiler(); }
-
     if (!isSelfieFlair || !isSpoiled) {
       const modNotes = await reddit.getModNotes({subreddit: context.subredditName, user: post.authorName, filter: 'NOTE'}).all();
       let nReminders = 0;
@@ -448,6 +445,9 @@ forms.post('/apply-rule', async (c) => {
         await removePost(postId as T3, 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. This has happened ' + nAllowedReminders + ' or more times in the past as well with your posts, therefore this post was removed.', 'selfie');
         return c.json<UiResponse>({ showToast: 'This user broke selfie rules ' + nAllowedReminders + ' or more times in the past, so their post was removed.',}, 200);
       }
+
+      if (!isSelfieFlair) { await reddit.setPostFlair({subredditName: context.subredditName, postId: postId as T3, flairTemplateId: selfieFlairId}); }
+      if (!isSpoiled) { await post.markAsSpoiler(); }
 
       const commentText = 'This post didn\'t have the selfie flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the selfie rules in the future.';
       const comment = await post.addComment({text: commentText, runAs: 'APP'});
@@ -476,9 +476,6 @@ forms.post('/apply-rule', async (c) => {
     const isPoliticalFlair = flair?.templateId == politicalFlairId;
     const isSpoiled = post.isSpoiler();
 
-    if (!isPoliticalFlair) { await reddit.setPostFlair({subredditName: context.subredditName, postId: postId as T3, flairTemplateId: politicalFlairId}); }
-    if (!isSpoiled) { await post.markAsSpoiler(); }
-
     if (!isPoliticalFlair || !isSpoiled) {
       const modNotes = await reddit.getModNotes({subreddit: context.subredditName, user: post.authorName, filter: 'NOTE'}).all();
       let nReminders = 0;
@@ -489,6 +486,9 @@ forms.post('/apply-rule', async (c) => {
         await removePost(postId as T3, 'This post didn\'t have the political flair and/or was not marked as a spoiler. This has happened ' + nAllowedReminders + ' or more times in the past as well with your posts, therefore this post was removed.', 'political');
         return c.json<UiResponse>({ showToast: 'This user broke political rules ' + nAllowedReminders + ' or more times in the past, so their post was removed.',}, 200);
       }
+
+      if (!isPoliticalFlair) { await reddit.setPostFlair({subredditName: context.subredditName, postId: postId as T3, flairTemplateId: politicalFlairId}); }
+      if (!isSpoiled) { await post.markAsSpoiler(); }
 
       const commentText = 'This post didn\'t have the political flair and/or was not marked as a spoiler. I now gave it the correct flair and marked it as a spoiler. Please be sure to follow the political rules in the future.';
       const comment = await post.addComment({text: commentText, runAs: 'APP'});
